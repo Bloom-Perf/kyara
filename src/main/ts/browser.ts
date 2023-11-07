@@ -98,5 +98,6 @@ export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmit
 
     } catch (e) {
         logger.error(`Could not read yaml configuration file "${conf.yamlFilePath}"`)
+        process.exit(1);
     }
 }
