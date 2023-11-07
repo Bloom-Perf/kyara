@@ -17,10 +17,10 @@
     "start:prod": "cd dist/main/ts && node ./main.js"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
-    "@types/luxon": "^3.3.0",
-    "@types/node": "^18.18.8",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.4"
+    "@types/express": "4.17.17",
+    "@types/luxon": "3.3.0",
+    "@types/node": "18.18.8",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.4"
   }
 }
