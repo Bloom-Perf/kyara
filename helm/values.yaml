@@ -1,0 +1,73 @@
+namespace: bloom-perf
+app: kyara
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/bloom-perf/kyara
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+containerPort: 3000
+service:
+  type: ClusterIP
+  port: 9090
+resources:
+  limits:
+    cpu: 2
+    memory: 4096Mi
+  requests:
+    cpu: 1
+    memory: 2048Mi
+
+ingress:
+  className: ""
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  paths:
+    - path: /kyara(/|$)(.*)
+
+imagePullSecrets: "image pull secret to change"
+nameOverride: ""
+fullnameOverride: ""
+
+configName: kyara-config
+volumes:
+  - name: kyara-config-volume
+    mountPath: /var/config
+    subPath: kyara.yml
+    configMap:
+      name: kyara-config
+      defaultMode: 777
+env:
+  - name: KYARA_YAML_FILE_PATH
+    value: /var/config/kyara.yml
+  - name: KYARA_APP_NAME
+    value: kyara-puppet
+  - name: KYARA_HTTP_LIVENESS_PROBE_ROUTE
+    value: /live
+  - name: KYARA_HTTP_METRICS_ROUTE
+    value: /metrics
+  - name: KYARA_HTTP_PORT
+    value: 9090
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+restartPolicy: Never
+ttlSecondsAfterFinished: 10
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: {}
+
+affinity: {}

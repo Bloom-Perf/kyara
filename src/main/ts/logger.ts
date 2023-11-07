@@ -7,4 +7,4 @@ export const createLogger = () => winston.createLogger({
   transports: [
     new winston.transports.Console()
   ]
-})
+});

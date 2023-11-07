@@ -1,0 +1,4 @@
+scenarios:
+  - location: http://google.com
+    steps:
+      - waitForever
