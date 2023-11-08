@@ -16,7 +16,87 @@ jobs:
 
       # https://github.com/marketplace/actions/push-to-ghcr
       - name: Build and publish a Docker image for ${{ github.repository }}
-        uses: macbre/push-to-ghcr@master
-        with:
-          image_name: ${{ github.repository }}  # it will be lowercased internally
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            NPM_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+            DOCKER_BUILDKIT: 1
+            IMAGE_NAME: ${{ github.repository }}
+            REPOSITORY: ghcr.io
+            DOCKERFILE: ./Dockerfile
+            CONTEXT: "."
+
+        run: |
+            echo "Using $(docker -v)"
+
+            echo "::group::Logging into the GitHub Container registry (ghcr.io) ..."
+            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            echo "::endgroup::"
+
+            echo "::group::Set commit tag and image name"
+            if [ "${{ github.event_name }}" = "release" ]; then
+            export COMMIT_TAG=${GITHUB_REF:10}
+            export COMMIT_TAG=${COMMIT_TAG//v/}
+            else
+            if [ -z ${IMAGE_TAG} ]; then
+                export COMMIT_TAG=latest
+            else
+                export COMMIT_TAG=${IMAGE_TAG}
+            fi
+            fi
+
+            # lowercase the image name, see https://github.com/macbre/push-to-ghcr/issues/12
+            export IMAGE_NAME=$(echo ${IMAGE_NAME} | tr '[:upper:]' '[:lower:]')
+
+            echo "Tagging with ${COMMIT_TAG}"
+            echo "::endgroup::"
+
+            export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            export GITHUB_URL=https://github.com/${{ github.repository }}
+
+            echo "::group::Building the Docker image: ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} from ${DOCKERFILE} in ${CONTEXT} context ..."
+
+            # https://docs.docker.com/develop/develop-images/build_enhancements/
+            # https://docs.docker.com/engine/reference/commandline/build/#specifying-external-cache-sources
+            set -x
+            >&0 docker build \
+                --file ${DOCKERFILE} \
+                --cache-from ${REPOSITORY}/${IMAGE_NAME}:latest \
+                --build-arg BUILDKIT_INLINE_CACHE=1 \
+                \
+                --build-arg BUILD_DATE=${BUILD_DATE} \
+                --build-arg GITHUB_SHA=${GITHUB_SHA} \
+                \
+                --build-arg NPM_TOKEN=${NPM_TOKEN} \
+                \
+                --tag ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} \
+                --tag docker.io/${IMAGE_NAME}:${COMMIT_TAG} \
+                \
+                --label org.label-schema.build-date=${BUILD_DATE} \
+                --label org.label-schema.vcs-url=${GITHUB_URL} \
+                --label org.label-schema.vcs-ref=${GITHUB_SHA} \
+                \
+                --label org.opencontainers.image.created=${BUILD_DATE} \
+                --label org.opencontainers.image.source=${GITHUB_URL} \
+                --label org.opencontainers.image.revision=${GITHUB_SHA} \
+                ${CONTEXT}
+            set +x
+
+            echo "::endgroup::"
+
+            echo "::group::Inspecting the image ..."
+            docker images
+
+            echo "Labels:"
+            docker image inspect ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} | jq '.[].Config.Labels'
+
+            echo "Env variables:"
+            docker image inspect ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} | jq '.[].Config.Env'
+
+            echo "::endgroup::"
+
+            echo "::group::Pushing the Docker image to ${REPOSITORY} ..."
+            >&0 docker push ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} && echo "Pushed"
+            echo "::endgroup::"
+
+            echo "::endgroup::"
