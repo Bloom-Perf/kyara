@@ -20,7 +20,7 @@ export type ConfOverrides = Partial<{
 }>;
 
 export const logConf = (conf: Conf, logger: Logger) => {
-    logger.debug("Starting DisplayStationDisplay with the following configuration:");
+    logger.debug("Starting Kyara server with the following configuration:");
 
 
     logger.debug(
@@ -37,7 +37,7 @@ export const createConf = (overrides: ConfOverrides): Conf => {
 
     return {
         appName: process.env.KYARA_APP_NAME || "kyara-puppet",
-        yamlFilePath: process.env.KYARA_YAML_FILE_PATH || "/var/conf/kyara.yaml",
+        yamlFilePath: process.env.KYARA_YAML_FILE_PATH || "/var/config/kyara.yaml",
         headless: overrides.headless !== undefined && overrides.headless || !!process.env.KYARA_HEADLESS,
         httpPort: overrides.httpPort || parseInt(process.env.KYARA_HTTP_PORT || "0"),
         livenessProbeRoute: overrides.livenessProbeRoute || process.env.KYARA_HTTP_LIVENESS_PROBE_ROUTE || "/live",

@@ -9,7 +9,7 @@ import * as yp from "@bloom-perf/yaml-pptr";
 
 export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmitter): Promise<void> => {
 
-    const runScenarios = yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: "utf8" }));
+    const runScenarios = yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: "utf8" }), logger);
 
     // Run the node orchestrator
     logger.info(`Start browser`);
