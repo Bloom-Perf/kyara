@@ -9,95 +9,90 @@ import * as yp from "@bloom-perf/yaml-pptr";
 
 export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmitter): Promise<void> => {
 
-    try {
-        const runScenarios = yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: "utf8" }));
+    const runScenarios = yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: "utf8" }));
 
-        // Run the node orchestrator
-        logger.info(`Start browser`);
+    // Run the node orchestrator
+    logger.info(`Start browser`);
 
-        // Spawn the browser instance
-        const browser = await puppeteer.launch({
-            headless: conf.headless,
-            ignoreHTTPSErrors: true,
-            product: "firefox",
-            ignoreDefaultArgs: ["--disable-extensions"],
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',
-                '--disable-gpu',
-                '--ignore-certificate-errors'
-            ]
-        });
+    // Spawn the browser instance
+    const browser = await puppeteer.launch({
+        headless: conf.headless,
+        ignoreHTTPSErrors: true,
+        product: "firefox",
+        ignoreDefaultArgs: ["--disable-extensions"],
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu',
+            '--ignore-certificate-errors'
+        ]
+    });
 
-        me.browserStarted("firefox", Status.Success);
+    me.browserStarted("firefox", Status.Success);
 
-        // On application exit, close all browsers
-        process.on('exit', async () => {
-            logger.info(`Closing browser`);
-            await browser.close();
-        });
+    // On application exit, close all browsers
+    process.on('exit', async () => {
+        logger.info(`Closing browser`);
+        await browser.close();
+    });
 
 
-        const fetchTabsRamCpuConsumption = () => {
+    const fetchTabsRamCpuConsumption = () => {
 
-            try {
-                // run the `ls` command using exec
-                const output = execSync("ps aux |grep firefox-bin | grep childID | awk '{print $3 \"-\" $6;}'");
+        try {
+            // run the `ls` command using exec
+            const output = execSync("ps aux |grep firefox-bin | grep childID | awk '{print $3 \"-\" $6;}'");
 
-                // log the output received from the command
-                const list: [number, number][] = output.toString().split("\n").map(line => line.split("-").map(str => +str)) as [number, number][];
+            // log the output received from the command
+            const list: [number, number][] = output.toString().split("\n").map(line => line.split("-").map(str => +str)) as [number, number][];
 
-                let podCpu = 0;
-                let podRam = 0;
+            let podCpu = 0;
+            let podRam = 0;
 
-                for (let [cpu, ram] of list) {
-                    podCpu += cpu;
-                    podRam += ram;
-                    cpu && ram && me.resourcesConsumptionPerTab("firefox", ram, cpu)
-                }
-
-                podRam && podCpu && me.resourcesConsumptionPerPod("firefox", podRam, podCpu);
-            } catch (e) {
-                logger.error(e);
-            } finally {
-                setTimeout(fetchTabsRamCpuConsumption, 5000);
+            for (let [cpu, ram] of list) {
+                podCpu += cpu;
+                podRam += ram;
+                cpu && ram && me.resourcesConsumptionPerTab("firefox", ram, cpu)
             }
+
+            podRam && podCpu && me.resourcesConsumptionPerPod("firefox", podRam, podCpu);
+        } catch (e) {
+            logger.error(e);
+        } finally {
+            setTimeout(fetchTabsRamCpuConsumption, 5000);
         }
-
-        fetchTabsRamCpuConsumption();
-
-        // Start all tabs and wait for completion
-
-        await runScenarios(browser, async tab => {
-            try {
-                logger.info(`Start browser page now!`);
-                me.browserTabStarted(Status.Success);
-
-                tab.on("request", request => me.browserRequest(new URL(request.url()).hostname))
-                tab.on("requestfinished", request => me.browserRequestFinished(new URL(request.url()).hostname))
-                tab.on("requestfailed", request => me.browserRequestFailed(new URL(request.url()).hostname))
-                tab.on("response", response => me.browserResponse(new URL(response.url()).hostname))
-                tab.on("error", err => {
-                    me.browserError();
-                    logger.info(err.message, { ...err, tags: ["BROWSER_LOG", "BROWSER_ERROR"]/*, url*/ });
-                })
-                tab.on("console", (msg: ConsoleMessage) => {
-                    me.browserLogLine();
-                    logger.info(msg.text(), { tags: ["BROWSER_LOG"] /*, url*/ });
-                });
-            } catch (err) {
-                me.browserTabStarted(Status.Error);
-                logger.error(`Error on page: ${chalk.redBright(err)}`);
-            }
-        });
-
-    } catch (e) {
-        logger.error(`Could not read yaml configuration file "${conf.yamlFilePath}"`)
-        process.exit(1);
     }
+
+    fetchTabsRamCpuConsumption();
+
+    // Start all tabs and wait for completion
+
+    await runScenarios(browser, async tab => {
+        try {
+            logger.info(`Start browser page now!`);
+            me.browserTabStarted(Status.Success);
+
+            tab.on("request", request => me.browserRequest(new URL(request.url()).hostname))
+            tab.on("requestfinished", request => me.browserRequestFinished(new URL(request.url()).hostname))
+            tab.on("requestfailed", request => me.browserRequestFailed(new URL(request.url()).hostname))
+            tab.on("response", response => me.browserResponse(new URL(response.url()).hostname))
+            tab.on("error", err => {
+                me.browserError();
+                logger.info(err.message, { ...err, tags: ["BROWSER_LOG", "BROWSER_ERROR"]/*, url*/ });
+            })
+            tab.on("console", (msg: ConsoleMessage) => {
+                me.browserLogLine();
+                logger.info(msg.text(), { tags: ["BROWSER_LOG"] /*, url*/ });
+            });
+        } catch (err) {
+            me.browserTabStarted(Status.Error);
+            logger.error(`Error on page: ${chalk.redBright(err)}`);
+        }
+    });
+
 }
