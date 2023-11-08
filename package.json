@@ -17,7 +17,7 @@
     "start:prod": "cd dist/main/ts && node ./main.js"
   },
   "devDependencies": {
-    "@types/express": "4.17.17",
+    "@types/express": "4.17.21",
     "@types/luxon": "3.3.0",
     "@types/node": "20.9.0",
     "ts-node": "10.9.1",
