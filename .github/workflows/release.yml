@@ -36,7 +36,6 @@ jobs:
             echo "::group::Set commit tag and image name"
             if [ "${{ github.event_name }}" = "release" ]; then
             export COMMIT_TAG=${GITHUB_REF:10}
-            export COMMIT_TAG=${COMMIT_TAG//v/}
             else
             if [ -z ${IMAGE_TAG} ]; then
                 export COMMIT_TAG=latest
