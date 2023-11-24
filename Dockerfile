@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:21@sha256:bc56c8da9f3e892e2697e37db775c42c52abee85c6c035f21587fa509be76d76 AS builder
+FROM --platform=linux/amd64 node:21@sha256:84bb4077fd52933a935e7057ba9991e7cb18487b0ba444835dd44975aa94b7b2 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm run build
 # Production deployment
 # TODO: Should use a bundler
 
-FROM --platform=linux/amd64 node:21@sha256:bc56c8da9f3e892e2697e37db775c42c52abee85c6c035f21587fa509be76d76 AS runner
+FROM --platform=linux/amd64 node:21@sha256:84bb4077fd52933a935e7057ba9991e7cb18487b0ba444835dd44975aa94b7b2 AS runner
 
 WORKDIR /app
 
