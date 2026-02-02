@@ -84,6 +84,12 @@ npm run build
 # Run tests
 npm test
 
+# Lint and format code
+npm run lint           # Check for linting issues
+npm run lint:fix       # Fix linting issues automatically
+npm run format         # Format code with Prettier
+npm run format:check   # Check code formatting
+
 # Start in development mode
 npm run start:dev
 
