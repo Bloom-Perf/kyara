@@ -8,10 +8,7 @@ COPY tsconfig.json ./
 
 COPY ./src src
 
-ARG NPM_TOKEN
-RUN echo "//npm.pkg.github.com/:_authToken=$NPM_TOKEN" > .npmrc
-RUN PUPPETEER_PRODUCT=firefox npm install
-RUN rm -rf .npmrc
+RUN npm ci
 RUN npm run build
 
 # Production deployment

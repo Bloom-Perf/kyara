@@ -19,7 +19,6 @@ jobs:
         shell: bash
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            NPM_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
             DOCKER_BUILDKIT: 1
             IMAGE_NAME: ${{ github.repository }}
             REPOSITORY: ghcr.io
@@ -65,8 +64,6 @@ jobs:
                 \
                 --build-arg BUILD_DATE=${BUILD_DATE} \
                 --build-arg GITHUB_SHA=${GITHUB_SHA} \
-                \
-                --build-arg NPM_TOKEN=${NPM_TOKEN} \
                 \
                 --tag ${REPOSITORY}/${IMAGE_NAME}:${COMMIT_TAG} \
                 --tag docker.io/${IMAGE_NAME}:${COMMIT_TAG} \

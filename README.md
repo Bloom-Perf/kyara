@@ -100,8 +100,8 @@ npm run start:prod
 ### Docker Deployment
 
 ```bash
-# Build the image (replace with your NPM token)
-docker build --build-arg NPM_TOKEN=your_npm_token -t ghcr.io/bloom-perf/kyara:latest .
+# Build the image
+docker build -t ghcr.io/bloom-perf/kyara:latest .
 
 # Run the container
 docker run -p 3000:3000 \

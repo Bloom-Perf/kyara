@@ -22,15 +22,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '21.x'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@bloom-perf'
-      - name: Ci Install
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - name: Install dependencies
         run: npm ci
-        env:
-            NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN}}
-      - name: Build Typescript
+      - name: Lint
+        run: npm run lint
+      - name: Build
         run: npm run build
+      - name: Test
+        run: npm test

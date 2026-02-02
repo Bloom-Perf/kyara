@@ -64,6 +64,4 @@ Key environment variables:
 
 - **Puppeteer v24** - Uses `browser: "firefox"` option (not `product`)
 - **Chalk v5** - Pure ESM, requires ES modules
-- **@bloom-perf/yaml-pptr** - From GitHub Packages (requires `.npmrc` with registry config)
-
-The registry authentication token must be set for `npm install` to work.
+- **@bloom-perf/yaml-pptr** - Published on npmjs.com (no authentication required)
