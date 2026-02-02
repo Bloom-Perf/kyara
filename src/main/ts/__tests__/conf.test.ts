@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll } from '@jest/globals';
-import { createConf, Conf } from '../conf.js';
+import { describe, it, expect, beforeEach, afterAll, jest } from '@jest/globals';
+import { createConf, logConf, Conf } from '../conf.js';
 
 describe('createConf', () => {
   const originalEnv = { ...process.env };
@@ -61,5 +61,59 @@ describe('createConf', () => {
     expect(conf.httpPort).toBe(3000);
     expect(conf.httpMetricsRoute).toBe('/custom-metrics');
     expect(conf.headless).toBe(true);
+  });
+});
+
+describe('logConf', () => {
+  it('should call logger.debug with configuration details', () => {
+    const mockLogger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
+    const conf: Conf = {
+      appName: 'test-app',
+      yamlFilePath: '/test/path.yaml',
+      httpPort: 3000,
+      httpMetricsRoute: '/metrics',
+      livenessProbeRoute: '/live',
+      headless: true,
+    };
+
+    logConf(conf, mockLogger as any);
+
+    expect(mockLogger.debug).toHaveBeenCalledTimes(2);
+    expect(mockLogger.debug).toHaveBeenNthCalledWith(
+      1,
+      'Starting Kyara server with the following configuration:'
+    );
+  });
+
+  it('should format configuration entries', () => {
+    const debugCalls: string[] = [];
+    const mockLogger = {
+      debug: jest.fn((msg: string) => debugCalls.push(msg)),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
+    const conf: Conf = {
+      appName: 'my-app',
+      yamlFilePath: '/config/test.yaml',
+      httpPort: 8080,
+      httpMetricsRoute: '/prom',
+      livenessProbeRoute: '/health',
+      headless: false,
+    };
+
+    logConf(conf, mockLogger as any);
+
+    expect(debugCalls.length).toBe(2);
+    expect(debugCalls[1]).toContain('appName');
+    expect(debugCalls[1]).toContain('yamlFilePath');
+    expect(debugCalls[1]).toContain('httpPort');
   });
 });
