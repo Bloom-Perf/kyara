@@ -245,7 +245,7 @@ describe('main module', () => {
     await import('../main.js');
 
     // Wait for the promise rejection to be caught
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Fatal error when launching browsers')

@@ -15,6 +15,10 @@ npm run start:prod     # Run compiled JavaScript from dist/
 npm run installFirefox # Install Firefox for Puppeteer
 npm test               # Run Jest tests
 npm run test:coverage  # Run tests with coverage report
+npm run lint           # Run ESLint
+npm run lint:fix       # Run ESLint with auto-fix
+npm run format         # Format code with Prettier
+npm run format:check   # Check code formatting
 ```
 
 ## Architecture

@@ -317,14 +317,16 @@ describe('launchBrowsers', () => {
   });
 
   it('should handle tab callback errors and emit error status', async () => {
-    const mockRunScenarios = jest.fn<any>().mockImplementation(async (browser: any, callback: any) => {
-      const errorPage = {
-        on: jest.fn<any>().mockImplementation(() => {
-          throw new Error('Page setup failed');
-        }),
-      };
-      await callback(errorPage);
-    });
+    const mockRunScenarios = jest
+      .fn<any>()
+      .mockImplementation(async (browser: any, callback: any) => {
+        const errorPage = {
+          on: jest.fn<any>().mockImplementation(() => {
+            throw new Error('Page setup failed');
+          }),
+        };
+        await callback(errorPage);
+      });
     (ypMock.readYamlAndInterpret as jest.Mock<() => any>).mockReturnValue(mockRunScenarios);
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
@@ -338,7 +340,9 @@ describe('launchBrowsers', () => {
     (ypMock.readYamlAndInterpret as jest.Mock<() => any>).mockReturnValue(mockRunScenarios);
 
     // Mock execSync to return CPU-RAM pairs (no trailing newline to avoid NaN)
-    (childProcessMock.execSync as unknown as jest.Mock).mockReturnValue(Buffer.from('10-2048\n20-4096'));
+    (childProcessMock.execSync as unknown as jest.Mock).mockReturnValue(
+      Buffer.from('10-2048\n20-4096')
+    );
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 

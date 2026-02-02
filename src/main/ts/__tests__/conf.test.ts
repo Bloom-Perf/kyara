@@ -55,7 +55,7 @@ describe('createConf', () => {
     const conf = createConf({
       httpPort: 3000,
       httpMetricsRoute: '/custom-metrics',
-      headless: true
+      headless: true,
     });
 
     expect(conf.httpPort).toBe(3000);
