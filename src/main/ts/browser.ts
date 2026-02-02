@@ -17,8 +17,7 @@ export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmit
     // Spawn the browser instance
     const browser = await puppeteer.launch({
         headless: conf.headless,
-        ignoreHTTPSErrors: true,
-        product: "firefox",
+        browser: "firefox",
         ignoreDefaultArgs: ["--disable-extensions"],
         args: [
             '--no-sandbox',
@@ -30,7 +29,8 @@ export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmit
             '--single-process',
             '--disable-gpu',
             '--ignore-certificate-errors'
-        ]
+        ],
+        acceptInsecureCerts: true
     });
 
     me.browserStarted("firefox", Status.Success);
