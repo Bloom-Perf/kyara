@@ -23,7 +23,7 @@ npm run format:check   # Check code formatting
 
 ## Architecture
 
-Source code is in `src/main/ts/` with a simple module structure:
+Source code is in `src/` with a simple module structure:
 
 - **main.ts** - Entry point: initializes config, logger, metrics, launches browser, starts Express HTTP server
 - **browser.ts** - Core simulation logic: launches Firefox, executes YAML scenarios, monitors CPU/RAM via shell commands, captures browser events (requests, responses, errors)
@@ -31,6 +31,7 @@ Source code is in `src/main/ts/` with a simple module structure:
 - **logger.ts** - Winston logger with ECS format for Elastic Stack compatibility
 - **metrics.ts** - Prometheus metrics: counters for events, histograms for resource consumption
 - **types/** - Type declarations for untyped dependencies
+- **__tests__/** - Jest unit tests
 
 Factory pattern is used throughout: `createConf()`, `createLogger()`, `createMetricsEmitter()`, `createPromRegister()`.
 

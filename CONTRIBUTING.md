@@ -103,7 +103,7 @@ Example: `✨ Add support for custom browser arguments`
 
 ```
 kyara/
-├── src/main/ts/          # Source code
+├── src/                  # Source code
 │   ├── __tests__/        # Test files
 │   └── types/            # TypeScript declarations
 ├── helm/                 # Kubernetes Helm chart

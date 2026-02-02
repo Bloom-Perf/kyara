@@ -5,8 +5,8 @@ export default {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   collectCoverageFrom: [
-    'src/main/ts/**/*.ts',
-    '!src/main/ts/**/__tests__/**'
+    'src/**/*.ts',
+    '!src/**/__tests__/**'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

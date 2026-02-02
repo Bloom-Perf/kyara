@@ -14,8 +14,8 @@
   "scripts": {
     "installFirefox": "set PUPPETEER_PRODUCT=firefox && npm install",
     "build": "tsc -p .",
-    "start:dev": "cd src/main/ts/ && ts-node ./main.ts",
-    "start:prod": "cd dist/main/ts && node ./main.js",
+    "start:dev": "ts-node src/main.ts",
+    "start:prod": "node dist/main.js",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
     "lint": "eslint src/",
