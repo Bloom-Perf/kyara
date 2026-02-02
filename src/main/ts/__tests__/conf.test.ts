@@ -1,10 +1,10 @@
-import { createConf, Conf } from '../conf';
+import { describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { createConf, Conf } from '../conf.js';
 
 describe('createConf', () => {
-  const originalEnv = process.env;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    jest.resetModules();
     process.env = { ...originalEnv };
   });
 

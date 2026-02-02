@@ -1,8 +1,8 @@
-import { createConf, logConf } from "./conf";
+import { createConf, logConf } from "./conf.js";
 import express from "express";
-import { createMetricsEmitter, createPromRegister } from "./metrics";
-import { launchBrowsers } from "./browser";
-import { createLogger } from "./logger";
+import { createMetricsEmitter, createPromRegister } from "./metrics.js";
+import { launchBrowsers } from "./browser.js";
+import { createLogger } from "./logger.js";
 import { collectDefaultMetrics } from "prom-client";
 
 (async () => {
@@ -19,7 +19,7 @@ import { collectDefaultMetrics } from "prom-client";
 
     // Launching browsers and tabs altogether
     launchBrowsers(conf, logger, metricsEmitter)
-        .catch(err => console.error("Fatal error when launching browsers: " + err));
+        .catch((err: unknown) => console.error("Fatal error when launching browsers: " + err));
 
     // Start http server to expose prometheus metrics
     await express()

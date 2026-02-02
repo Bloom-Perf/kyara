@@ -1,7 +1,7 @@
-import puppeteer, { ConsoleMessage, Page } from "puppeteer";
-import { MetricsEmitter, Status } from "./metrics";
+import puppeteer, { ConsoleMessage, Page, HTTPRequest, HTTPResponse } from "puppeteer";
+import { MetricsEmitter, Status } from "./metrics.js";
 import chalk from "chalk";
-import { Conf } from "./conf";
+import { Conf } from "./conf.js";
 import { Logger } from "winston";
 import { execSync } from "child_process";
 import * as fs from "fs";
@@ -72,16 +72,16 @@ export const launchBrowsers = async (conf: Conf, logger: Logger, me: MetricsEmit
 
     // Start all tabs and wait for completion
 
-    await runScenarios(browser, async tab => {
+    await runScenarios(browser, async (tab: Page) => {
         try {
             logger.info(`Start browser page now!`);
             me.browserTabStarted(Status.Success);
 
-            tab.on("request", request => me.browserRequest(new URL(request.url()).hostname))
-            tab.on("requestfinished", request => me.browserRequestFinished(new URL(request.url()).hostname))
-            tab.on("requestfailed", request => me.browserRequestFailed(new URL(request.url()).hostname))
-            tab.on("response", response => me.browserResponse(new URL(response.url()).hostname))
-            tab.on("error", err => {
+            tab.on("request", (request: HTTPRequest) => me.browserRequest(new URL(request.url()).hostname))
+            tab.on("requestfinished", (request: HTTPRequest) => me.browserRequestFinished(new URL(request.url()).hostname))
+            tab.on("requestfailed", (request: HTTPRequest) => me.browserRequestFailed(new URL(request.url()).hostname))
+            tab.on("response", (response: HTTPResponse) => me.browserResponse(new URL(response.url()).hostname))
+            tab.on("error", (err: Error) => {
                 me.browserError();
                 logger.info(err.message, { ...err, tags: ["BROWSER_LOG", "BROWSER_ERROR"]/*, url*/ });
             })
