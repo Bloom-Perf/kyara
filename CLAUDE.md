@@ -13,9 +13,9 @@ npm run build          # TypeScript compilation (outputs to dist/)
 npm run start:dev      # Run in development mode with ts-node
 npm run start:prod     # Run compiled JavaScript from dist/
 npm run installFirefox # Install Firefox for Puppeteer
+npm test               # Run Jest tests
+npm run test:coverage  # Run tests with coverage report
 ```
-
-There are no test or lint commands configured.
 
 ## Architecture
 
@@ -26,12 +26,22 @@ Source code is in `src/main/ts/` with a simple module structure:
 - **conf.ts** - Configuration via environment variables (KYARA_* prefix)
 - **logger.ts** - Winston logger with ECS format for Elastic Stack compatibility
 - **metrics.ts** - Prometheus metrics: counters for events, histograms for resource consumption
+- **types/** - Type declarations for untyped dependencies
 
 Factory pattern is used throughout: `createConf()`, `createLogger()`, `createMetricsEmitter()`, `createPromRegister()`.
+
+## Module System
+
+The project uses **ES Modules** (`"type": "module"` in package.json):
+
+- All relative imports must use `.js` extensions (e.g., `import { foo } from "./bar.js"`)
+- TypeScript is configured with `"module": "Node16"` and `"moduleResolution": "nodenext"`
+- Jest is configured for ESM with `NODE_OPTIONS='--experimental-vm-modules'`
 
 ## Configuration
 
 Key environment variables:
+
 - `KYARA_YAML_FILE_PATH` - Path to scenario YAML file (default: `/var/config/kyara.yaml`)
 - `KYARA_HTTP_PORT` - HTTP server port (default: 0 = random)
 - `KYARA_HEADLESS` - Run browser headless
@@ -43,8 +53,12 @@ Key environment variables:
 - Docker multi-stage build defined in `Dockerfile`
 - Helm chart in `helm/` for Kubernetes deployment
 - Scenarios are mounted via ConfigMap from `helm/config/kyara.yml`
-- GitHub Actions CI runs build on push; releases publish to ghcr.io
+- GitHub Actions CI runs build and tests on push; releases publish to ghcr.io
 
 ## Dependencies
 
-Uses `@bloom-perf/yaml-pptr` from GitHub Packages (requires `.npmrc` with registry config). The registry authentication token must be set for `npm install` to work.
+- **Puppeteer v24** - Uses `browser: "firefox"` option (not `product`)
+- **Chalk v5** - Pure ESM, requires ES modules
+- **@bloom-perf/yaml-pptr** - From GitHub Packages (requires `.npmrc` with registry config)
+
+The registry authentication token must be set for `npm install` to work.
