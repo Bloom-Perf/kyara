@@ -1,186 +1,170 @@
 # Kyara
 
-[![GitHub last commit (by committer)](https://img.shields.io/github/last-commit/bloom-perf/kyara?logo=github)](https://github.com/bloom-perf/kyara)
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/bloom-perf/kyara/ci.yml?style=flat&branch=main)](https://github.com/bloom-perf/kyara/actions)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/bloom-perf/kyara/release.yml?label=publish)](https://github.com/bloom-perf/kyara/actions)
-[![GitHub release (with filter)](https://img.shields.io/github/v/release/bloom-perf/kyara?style=flat)](https://github.com/bloom-perf/kyara/releases)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](https://opensource.org/licenses/Apache-2.0)
+[![GitHub last commit](https://img.shields.io/github/last-commit/bloom-perf/kyara?logo=github)](https://github.com/bloom-perf/kyara)
+[![CI](https://img.shields.io/github/actions/workflow/status/bloom-perf/kyara/ci.yml?branch=main&label=CI)](https://github.com/bloom-perf/kyara/actions)
+[![Release](https://img.shields.io/github/actions/workflow/status/bloom-perf/kyara/release.yml?label=release)](https://github.com/bloom-perf/kyara/actions)
+[![GitHub release](https://img.shields.io/github/v/release/bloom-perf/kyara)](https://github.com/bloom-perf/kyara/releases)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-*Kyara* is a web traffic simulation tool that enables you to write and deploy massive web interaction scenarios to simulate realistic user traffic for your applications. By leveraging headless browsers, YAML-based scenario definitions (cf. [yaml-pptr](https://github.com/Bloom-Perf/yaml-pptr)), and Prometheus-powered metrics, Kyara offers a robust solution for performance testing and monitoring in modern web environments.
+**Kyara** is a web traffic simulation tool that enables you to write and deploy massive web interaction scenarios to simulate realistic user traffic. By leveraging headless browsers, YAML-based scenario definitions (via [yaml-pptr](https://github.com/Bloom-Perf/yaml-pptr)), and Prometheus metrics, Kyara offers a robust solution for performance testing in modern web environments.
 
----
+## Table of Contents
 
-## Problem Statement
+- [Why Kyara?](#why-kyara)
+- [How It Works](#how-it-works)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
 
-Modern web applications require thorough performance testing to ensure reliability and scalability under high traffic loads. Conventional load testing tools often simulate traffic at the HTTP request level, which may not fully capture the intricacies of real browser behavior such as JavaScript execution, rendering, and dynamic interactions.
+## Why Kyara?
+
+Modern web applications require thorough performance testing to ensure reliability under high traffic loads. Conventional load testing tools often simulate traffic at the HTTP request level, which may not fully capture real browser behavior such as JavaScript execution, rendering, and dynamic interactions.
 
 Kyara addresses these challenges by:
 
-- **Simulating Realistic User Behavior:** Launches headless browsers to mimic genuine user interactions.
-- **Flexible Scenario Definitions:** Uses a simple YAML format to describe complex web interaction flows.
-- **Comprehensive Metrics Collection:** Provides detailed insights into browser events and resource consumption for proactive performance monitoring.
-- **Scalable Deployments:** Supports containerization and Kubernetes orchestration via Docker and Helm charts.
+- **Simulating Realistic User Behavior** — Launches headless browsers to mimic genuine user interactions
+- **Flexible Scenario Definitions** — Uses a simple YAML format to describe complex web interaction flows
+- **Comprehensive Metrics Collection** — Provides detailed insights into browser events and resource consumption
+- **Scalable Deployments** — Supports containerization and Kubernetes orchestration via Docker and Helm
 
----
+## How It Works
 
-## How Kyara Works
+1. **Browser Orchestration** — Uses [Puppeteer](https://github.com/puppeteer/puppeteer) to launch headless Firefox instances controlled programmatically to simulate user interactions
 
-1. **Browser Orchestration:**  
-   Kyara uses [Puppeteer](https://github.com/puppeteer/puppeteer) to launch headless Firefox instances. These browsers are controlled programmatically to simulate user interactions on web pages.
+2. **Scenario Interpretation** — Scenarios defined in YAML files are interpreted using [yaml-pptr](https://github.com/bloom-perf/yaml-pptr) to execute navigation, waiting, and interaction steps
 
-2. **Scenario Interpretation:**  
-   Scenarios are defined in a YAML file (e.g., `kyara.yml`) using a simple, human-readable format. Kyara interprets these scenarios with the help of the [yaml-pptr](https://github.com/bloom-perf/yaml-pptr) library to execute a sequence of steps such as navigation, waiting, and interaction.
+3. **Metrics & Logging** — Collects metrics (browser startup, tab activity, HTTP lifecycle, CPU/RAM usage) via [prom-client](https://github.com/siimon/prom-client) and logs events with [Winston](https://github.com/winstonjs/winston)
 
-3. **Metrics and Logging:**  
-   The tool collects various metrics (e.g., browser start-up, tab activity, HTTP request lifecycle, CPU and RAM usage) using [Prometheus client for Node.js](https://github.com/siimon/prom-client) and logs events with [Winston](https://github.com/winstonjs/winston). Metrics are exposed via an HTTP endpoint for real-time monitoring.
-
-4. **Deployment Flexibility:**  
-   Kyara provides a Dockerfile for containerization and a Helm chart for seamless deployment on Kubernetes clusters, allowing it to scale according to your testing needs.
-
----
+4. **Deployment Flexibility** — Includes Dockerfile and Helm chart for seamless deployment on Kubernetes clusters
 
 ## Features
 
-- **Realistic Traffic Simulation:**  
-  Execute user-like interactions using headless browsers.
+| Feature | Description |
+|---------|-------------|
+| Realistic Traffic | Execute user-like interactions using headless browsers |
+| YAML Scenarios | Define and manage complex scenarios with straightforward syntax |
+| Prometheus Metrics | Monitor browser events, resource consumption, and HTTP interactions |
+| Container Ready | Deploy via Docker or Helm in your CI/CD pipeline |
 
-- **YAML-Based Scenario Configuration:**  
-  Define and manage complex scenarios easily with a straightforward YAML syntax.
+## Quick Start
 
-- **Detailed Metrics Collection:**  
-  Monitor browser events, resource consumption, and HTTP interactions with Prometheus metrics.
+```bash
+# Clone the repository
+git clone https://github.com/bloom-perf/kyara.git
+cd kyara
 
-- **Container and Kubernetes Ready:**  
-  Deploy Kyara via Docker or Helm to integrate into your CI/CD pipeline and orchestration environment.
+# Install dependencies
+npm install
 
----
+# Run in development mode
+npm run start:dev
+```
 
 ## Installation
 
 ### Prerequisites
 
-- **Node.js:** v22 (or higher recommended)
-- **Docker:** For containerized deployments
-- **Kubernetes:** If deploying using Helm
+- **Node.js** v22 or higher
+- **Docker** (for containerized deployments)
+- **Kubernetes** (for Helm deployments)
 
 ### Local Development
 
-1. **Clone the Repository:**
+```bash
+# Install dependencies
+npm install
 
-    ```bash
-    git clone https://github.com/bloom-perf/kyara.git
-    cd kyara
-    ```
+# Build the project
+npm run build
 
-2. **Install Dependencies:**
+# Run tests
+npm test
 
-    ```bash
-    npm install
-    ```
+# Start in development mode
+npm run start:dev
 
-3. **Build the Project:**
-
-   ```bash
-   npm run build
-   ```
-
-4. **Run Development Mode:**
-
-   ```bash
-   npm run start:dev
-   ```
+# Start in production mode
+npm run start:prod
+```
 
 ### Docker Deployment
 
-1. **Build the Docker Image:**  
-   Replace `your_npm_token` with your NPM token.
+```bash
+# Build the image (replace with your NPM token)
+docker build --build-arg NPM_TOKEN=your_npm_token -t ghcr.io/bloom-perf/kyara:latest .
 
-    ```bash
-    docker build --build-arg NPM_TOKEN=your_npm_token -t ghcr.io/bloom-perf/kyara:latest .
-    ```
+# Run the container
+docker run -p 3000:3000 \
+  -e KYARA_HTTP_PORT=3000 \
+  -e KYARA_YAML_FILE_PATH=/var/config/kyara.yaml \
+  ghcr.io/bloom-perf/kyara:latest
+```
 
-2. **Run the Container:**
+### Kubernetes Deployment (Helm)
 
-    ```bash
-    docker run -p 3000:3000 \
-    -e KYARA_HTTP_PORT=3000 \
-    -e KYARA_YAML_FILE_PATH=/var/config/kyara.yaml \
-    ghcr.io/bloom-perf/kyara:latest
-    ```
+```bash
+# Package the Helm chart
+helm package helm/
 
-### Kubernetes Deployment with Helm
+# Deploy the chart
+helm install kyara-release ./kyara-0.0.1.tgz \
+  --namespace bloom-perf \
+  --create-namespace
 
-Kyara comes with a Helm chart located in the helm directory.
+# Customize via values.yaml or override parameters
+helm install kyara-release ./kyara-0.0.1.tgz \
+  --set replicaCount=3 \
+  --namespace bloom-perf
+```
 
-1. **Package the Helm Chart:**  
-   Replace `kyara-0.0.1.tgz` with the desired chart version.
+## Configuration
 
-    ```bash
-    helm package helm/
-    ```
+### Environment Variables
 
-2. **Deploy the Chart:**
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KYARA_APP_NAME` | Application name | `kyara-puppet` |
+| `KYARA_YAML_FILE_PATH` | Path to YAML scenario file | `/var/config/kyara.yaml` |
+| `KYARA_HTTP_PORT` | HTTP server port | `0` (random) |
+| `KYARA_HTTP_METRICS_ROUTE` | Prometheus metrics endpoint | `/metrics` |
+| `KYARA_HTTP_LIVENESS_PROBE_ROUTE` | Health check endpoint | `/live` |
+| `KYARA_HEADLESS` | Run browser in headless mode | `false` |
 
-    ```bash
-    helm install kyara-release ./kyara-0.0.1.tgz --namespace bloom-perf --create-namespace
-    ```
-
-3. **Customize Deployment:**  
-   Edit `helm/values.yaml` or provide override parameters during installation as needed.
-
----
-
-## Usage Examples
+## Usage
 
 ### Defining a Scenario
 
-Create a YAML file (e.g., kyara.yml) to define your interaction scenario:
-    ```yaml
-    scenarios:
-      - location: http://google.com
-        steps:
-          - waitForever
-    ```
+Create a YAML file (e.g., `kyara.yml`) to define your interaction scenario:
 
-This example instructs Kyara to launch a browser, navigate to <http://google.com>, and execute a "waitForever" step. You can define multiple scenarios with various actions (e.g., click, navigate, wait) to simulate complex user behaviors.
+```yaml
+scenarios:
+  - location: http://example.com
+    steps:
+      - waitForever
+```
 
-### Accessing Metrics and Health Checks
+This example instructs Kyara to launch a browser, navigate to the URL, and wait indefinitely. You can define multiple scenarios with various actions (click, navigate, wait) to simulate complex user behaviors.
 
-- Prometheus Metrics Endpoint:
+See [yaml-pptr documentation](https://github.com/Bloom-Perf/yaml-pptr) for the full scenario syntax.
 
-Exposed at the route specified by KYARA_HTTP_METRICS_ROUTE (default: /metrics).
-    ```bash
-    curl http://localhost:3000/metrics
-    ```
+### Accessing Endpoints
 
-- Liveness Probe:
+```bash
+# Prometheus metrics
+curl http://localhost:3000/metrics
 
-Available at the route specified by KYARA_HTTP_LIVENESS_PROBE_ROUTE (default: /live).
-    ```bash
-    curl http://localhost:3000/live
-    ```
-
-### Environment Configuration
-
-Kyara can be customized through several environment variables:
-
-- `KYARA_APP_NAME`: Application name (default: `kyara-puppet`).
-- `KYARA_YAML_FILE_PATH`: Path to the YAML configuration file (default: /var/config/kyara.yaml).
-- `KYARA_HTTP_PORT`: Port for the HTTP server exposing metrics and liveness endpoints.
-- `KYARA_HTTP_METRICS_ROUTE`: URL path for Prometheus metrics (default: /metrics).
-- `KYARA_HTTP_LIVENESS_PROBE_ROUTE`: URL path for the liveness probe (default: /live).
-- `KYARA_HEADLESS`: Boolean flag to enable headless mode.
-
-Set these variables in your deployment environment to tailor Kyara’s behavior to your needs.
-
----
+# Liveness probe
+curl http://localhost:3000/live
+```
 
 ## Contributing
 
-Contributions are welcome! Please adhere to the repository’s contribution guidelines when submitting issues or pull requests.
-
----
+Contributions are welcome! Please open an issue or submit a pull request.
 
 ## License
 
-Kyara is licensed under the Licence [![Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?label=&style=flat)](https://opensource.org/licenses/Apache-2.0).
+Kyara is licensed under the [Apache 2.0 License](https://opensource.org/licenses/Apache-2.0).
