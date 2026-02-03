@@ -45,30 +45,36 @@ Future improvements and feature ideas for Kyara.
 ## AI-Powered Features
 
 ### Scenario Generation
+
 - [ ] **Natural Language to YAML** - Describe user journeys in plain English, AI generates YAML scenarios
 - [ ] **Intelligent Crawling** - Analyze a website and auto-generate realistic user paths
 - [ ] **Analytics-based Scenarios** - Create scenarios from real user behavior data (Google Analytics, Matomo)
 
 ### Results Analysis
+
 - [ ] **Anomaly Detection** - Automatically identify unusual metrics and patterns
 - [ ] **Root Cause Analysis** - Suggest probable causes for performance issues
 - [ ] **Regression Detection** - Compare test runs and alert on performance degradation
 - [ ] **Natural Language Reports** - Auto-generate human-readable test summaries
 
 ### Adaptive Testing
+
 - [ ] **Intelligent Load** - Dynamically adjust load based on system response
 - [ ] **Auto-exploration** - Automatically find breaking points without manual configuration
 - [ ] **Capacity Prediction** - Estimate when the system will reach its limits
 
 ### Self-healing Scenarios
+
 - [ ] **Adaptive Selectors** - Auto-fix CSS/XPath selectors when UI changes
 - [ ] **Dynamic Content Handling** - Intelligently adapt assertions to content variations
 
 ### Conversational Interface
+
 - [ ] **Chat Control** - Natural language commands: "Run a load test on login page with 100 users"
 - [ ] **Results Q&A** - Ask questions: "Which page has the highest latency?"
 - [ ] **Debug Assistant** - Analyze logs and suggest fixes
 
 ### Visual Analysis
+
 - [ ] **Visual Regression Under Load** - Detect rendering issues during performance tests
 - [ ] **Screenshot Analysis** - Identify visual errors (blank pages, broken layouts, error messages)
