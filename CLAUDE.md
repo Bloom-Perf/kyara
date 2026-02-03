@@ -8,6 +8,8 @@ Kyara is a load/stress testing tool that uses Puppeteer with Firefox headless br
 
 ## Build and Development Commands
 
+Requires **Node.js v22+**.
+
 ```bash
 npm run build          # TypeScript compilation (outputs to dist/)
 npm run start:dev      # Run in development mode with ts-node
@@ -19,6 +21,16 @@ npm run lint           # Run ESLint
 npm run lint:fix       # Run ESLint with auto-fix
 npm run format         # Format code with Prettier
 npm run format:check   # Check code formatting
+```
+
+### Running Single Tests
+
+```bash
+# Run a single test file
+NODE_OPTIONS='--experimental-vm-modules' npx jest src/__tests__/conf.test.ts
+
+# Run tests matching a pattern
+NODE_OPTIONS='--experimental-vm-modules' npx jest -t "pattern"
 ```
 
 ## Architecture
@@ -47,6 +59,7 @@ The project uses **ES Modules** (`"type": "module"` in package.json):
 
 Key environment variables:
 
+- `KYARA_APP_NAME` - Application name (default: `kyara-puppet`)
 - `KYARA_YAML_FILE_PATH` - Path to scenario YAML file (default: `/var/config/kyara.yaml`)
 - `KYARA_HTTP_PORT` - HTTP server port (default: 0 = random)
 - `KYARA_HEADLESS` - Run browser headless
