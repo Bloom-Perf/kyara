@@ -1,4 +1,4 @@
-import puppeteer, { HTTPRequest, HTTPResponse, ConsoleMessage } from 'puppeteer';
+import puppeteer, { HTTPRequest, HTTPResponse, ConsoleMessage, Page } from 'puppeteer';
 import { MetricsEmitter, Status } from './metrics.js';
 import chalk from 'chalk';
 import { Conf } from './conf.js';
@@ -6,6 +6,7 @@ import { Logger } from 'winston';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as yp from '@bloom-perf/yaml-pptr';
+import type { ScenarioContext } from '@bloom-perf/yaml-pptr';
 
 export const launchBrowsers = async (
   conf: Conf,
@@ -82,7 +83,7 @@ export const launchBrowsers = async (
   await yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: 'utf8' }), {
     browsers: { firefox: browser },
     logger,
-    onPage: async (tab, ctx) => {
+    onPage: async (tab: Page, ctx: ScenarioContext) => {
       try {
         const { scenarioName, iteration } = ctx;
         logger.info(`Start browser page now! [scenario=${scenarioName}, iteration=${iteration}]`);
