@@ -82,6 +82,9 @@ describe('launchBrowsers', () => {
       httpMetricsRoute: '/metrics',
       livenessProbeRoute: '/live',
       headless: true,
+      hikakuBaselinePath: undefined,
+      hikakuUpdateBaseline: false,
+      hikakuMaxIncreasePercent: 20,
     };
 
     // Setup mock logger

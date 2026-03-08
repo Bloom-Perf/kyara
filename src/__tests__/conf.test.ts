@@ -19,6 +19,9 @@ describe('createConf', () => {
     delete process.env.KYARA_HTTP_PORT;
     delete process.env.KYARA_HTTP_LIVENESS_PROBE_ROUTE;
     delete process.env.KYARA_HTTP_METRICS_ROUTE;
+    delete process.env.KYARA_HIKAKU_BASELINE_PATH;
+    delete process.env.KYARA_HIKAKU_UPDATE_BASELINE;
+    delete process.env.KYARA_HIKAKU_MAX_INCREASE_PERCENT;
 
     const conf = createConf({});
 
@@ -28,6 +31,9 @@ describe('createConf', () => {
     expect(conf.httpPort).toBe(0);
     expect(conf.livenessProbeRoute).toBe('/live');
     expect(conf.httpMetricsRoute).toBe('/metrics');
+    expect(conf.hikakuBaselinePath).toBeUndefined();
+    expect(conf.hikakuUpdateBaseline).toBe(false);
+    expect(conf.hikakuMaxIncreasePercent).toBe(20);
   });
 
   it('should use environment variables when set', () => {
@@ -46,6 +52,18 @@ describe('createConf', () => {
     expect(conf.httpPort).toBe(8080);
     expect(conf.livenessProbeRoute).toBe('/health');
     expect(conf.httpMetricsRoute).toBe('/prometheus');
+  });
+
+  it('should read hikaku environment variables', () => {
+    process.env.KYARA_HIKAKU_BASELINE_PATH = '/tmp/baseline.json';
+    process.env.KYARA_HIKAKU_UPDATE_BASELINE = 'true';
+    process.env.KYARA_HIKAKU_MAX_INCREASE_PERCENT = '15';
+
+    const conf = createConf({});
+
+    expect(conf.hikakuBaselinePath).toBe('/tmp/baseline.json');
+    expect(conf.hikakuUpdateBaseline).toBe(true);
+    expect(conf.hikakuMaxIncreasePercent).toBe(15);
   });
 
   it('should prefer overrides over environment variables', () => {
@@ -80,6 +98,9 @@ describe('logConf', () => {
       httpMetricsRoute: '/metrics',
       livenessProbeRoute: '/live',
       headless: true,
+      hikakuBaselinePath: undefined,
+      hikakuUpdateBaseline: false,
+      hikakuMaxIncreasePercent: 20,
     };
 
     logConf(conf, mockLogger as any);
@@ -107,6 +128,9 @@ describe('logConf', () => {
       httpMetricsRoute: '/prom',
       livenessProbeRoute: '/health',
       headless: false,
+      hikakuBaselinePath: undefined,
+      hikakuUpdateBaseline: false,
+      hikakuMaxIncreasePercent: 20,
     };
 
     logConf(conf, mockLogger as any);
