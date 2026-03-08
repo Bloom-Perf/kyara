@@ -31,6 +31,7 @@ describe('createMetricsEmitter', () => {
     expect(typeof metricsEmitter.browserRequestFinished).toBe('function');
     expect(typeof metricsEmitter.browserRequestFailed).toBe('function');
     expect(typeof metricsEmitter.browserResponse).toBe('function');
+    expect(typeof metricsEmitter.browserRequestDuration).toBe('function');
     expect(typeof metricsEmitter.browserError).toBe('function');
     expect(typeof metricsEmitter.resourcesConsumptionPerTab).toBe('function');
     expect(typeof metricsEmitter.resourcesConsumptionPerPod).toBe('function');
@@ -45,12 +46,14 @@ describe('createMetricsEmitter', () => {
     expect(metrics).toContain('status="success"');
   });
 
-  it('should increment browser_tab_started counter', async () => {
-    metricsEmitter.browserTabStarted(Status.Success);
+  it('should increment browser_tab_started counter with scenario and iteration labels', async () => {
+    metricsEmitter.browserTabStarted(Status.Success, 'Login Flow', 0);
 
     const metrics = await registry.metrics();
     expect(metrics).toContain('browser_tab_started');
     expect(metrics).toContain('status="success"');
+    expect(metrics).toContain('scenario="Login Flow"');
+    expect(metrics).toContain('iteration="0"');
   });
 
   it('should increment tab delay counter', async () => {
@@ -67,33 +70,45 @@ describe('createMetricsEmitter', () => {
     expect(metrics).toContain('browser_log_line');
   });
 
-  it('should increment browser_request counter with hostname', async () => {
-    metricsEmitter.browserRequest('example.com');
+  it('should increment browser_request counter with scenario and iteration labels', async () => {
+    metricsEmitter.browserRequest('example.com', 'Search Test', 2);
 
     const metrics = await registry.metrics();
     expect(metrics).toContain('browser_request');
     expect(metrics).toContain('hostname="example.com"');
+    expect(metrics).toContain('scenario="Search Test"');
+    expect(metrics).toContain('iteration="2"');
   });
 
   it('should increment browser_request_finished counter', async () => {
-    metricsEmitter.browserRequestFinished('example.com');
+    metricsEmitter.browserRequestFinished('example.com', 'test-scenario', 0);
 
     const metrics = await registry.metrics();
     expect(metrics).toContain('browser_request_finished');
   });
 
   it('should increment browser_request_failed counter', async () => {
-    metricsEmitter.browserRequestFailed('example.com');
+    metricsEmitter.browserRequestFailed('example.com', 'test-scenario', 0);
 
     const metrics = await registry.metrics();
     expect(metrics).toContain('browser_request_failed');
   });
 
   it('should increment browser_response counter', async () => {
-    metricsEmitter.browserResponse('example.com');
+    metricsEmitter.browserResponse('example.com', 'test-scenario', 0);
 
     const metrics = await registry.metrics();
     expect(metrics).toContain('browser_response');
+  });
+
+  it('should record browser_request_duration_seconds histogram', async () => {
+    metricsEmitter.browserRequestDuration('example.com', 'Login Flow', 1, 0.35);
+
+    const metrics = await registry.metrics();
+    expect(metrics).toContain('browser_request_duration_seconds');
+    expect(metrics).toContain('hostname="example.com"');
+    expect(metrics).toContain('scenario="Login Flow"');
+    expect(metrics).toContain('iteration="1"');
   });
 
   it('should increment browser_error counter', async () => {

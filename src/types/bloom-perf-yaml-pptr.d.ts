@@ -1,9 +1,22 @@
 declare module '@bloom-perf/yaml-pptr' {
-  import { Browser, Page } from 'puppeteer';
-  import { Logger } from 'winston';
+  import type { Browser, Page } from 'puppeteer';
+
+  export type ScenarioContext = {
+    scenarioName: string;
+    workerIndex: number;
+    iteration: number;
+  };
+
+  export type OnPageCallback = (page: Page, context: ScenarioContext) => Promise<void>;
+
+  export type ReadYamlOptions = {
+    browsers?: { [key: string]: Browser };
+    logger?: unknown;
+    onPage?: OnPageCallback;
+  };
 
   export function readYamlAndInterpret(
-    yaml: string,
-    logger: Logger
-  ): (browser: Browser, callback: (page: Page) => Promise<void>) => Promise<void>;
+    yamlContent: string,
+    options?: ReadYamlOptions
+  ): Promise<void>;
 }
