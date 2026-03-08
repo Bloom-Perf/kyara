@@ -12,6 +12,11 @@ describe('main module', () => {
     hikakuBaselinePath: undefined as string | undefined,
     hikakuUpdateBaseline: false,
     hikakuMaxIncreasePercent: 20,
+    hikakuReportMode: 'on_fail' as 'off' | 'on_fail' | 'always',
+    hikakuReportOutput: 'log' as 'log' | 'file',
+    hikakuReportFilePath: './hikaku-report.md',
+    hikakuReportLocale: 'en' as 'en' | 'fr',
+    hikakuLlmApiKey: undefined as string | undefined,
   };
 
   const mockLogger = {
@@ -50,6 +55,7 @@ describe('main module', () => {
   let expressMock: any;
   let promClientMock: any;
   let hikakuMock: any;
+  let fsMock: any;
 
   beforeEach(async () => {
     // Reset modules before each test
@@ -119,6 +125,12 @@ describe('main module', () => {
         scenarios: [],
         summary: { totalScenarios: 0, passed: 0, failed: 0, regressions: [] },
       })),
+      generateReport: jest.fn<any>().mockResolvedValue('## LLM Report\n\nAll good!'),
+      createAnthropicProvider: jest.fn(() => ({ complete: jest.fn() })),
+    }));
+
+    jest.unstable_mockModule('fs', () => ({
+      writeFileSync: jest.fn(),
     }));
 
     // Import mocked modules
@@ -129,11 +141,17 @@ describe('main module', () => {
     expressMock = await import('express');
     promClientMock = await import('prom-client');
     hikakuMock = await import('@bloom-perf/hikaku');
+    fsMock = await import('fs');
 
     // Reset hikaku-related mockConf fields
     mockConf.hikakuBaselinePath = undefined;
     mockConf.hikakuUpdateBaseline = false;
     mockConf.hikakuMaxIncreasePercent = 20;
+    mockConf.hikakuReportMode = 'on_fail';
+    mockConf.hikakuReportOutput = 'log';
+    mockConf.hikakuReportFilePath = './hikaku-report.md';
+    mockConf.hikakuReportLocale = 'en';
+    mockConf.hikakuLlmApiKey = undefined;
 
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -279,6 +297,12 @@ describe('main module', () => {
       loadBaseline: jest.fn(),
       baselineExists: jest.fn(() => false),
       compare: jest.fn(),
+      generateReport: jest.fn<any>().mockResolvedValue(''),
+      createAnthropicProvider: jest.fn(() => ({ complete: jest.fn() })),
+    }));
+
+    jest.unstable_mockModule('fs', () => ({
+      writeFileSync: jest.fn(),
     }));
 
     await import('../main.js');
@@ -365,5 +389,138 @@ describe('main module', () => {
     expect(processExitSpy).toHaveBeenCalledWith(1);
 
     processExitSpy.mockRestore();
+  });
+
+  it('should generate LLM report on fail when report mode is on_fail and API key is set', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuReportMode = 'on_fail';
+    mockConf.hikakuLlmApiKey = 'sk-test';
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'fail',
+      scenarios: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 0,
+        failed: 1,
+        regressions: [
+          {
+            metricName: 'p95_latency',
+            baselineValue: 0.5,
+            currentValue: 0.8,
+            deltaPercent: 60,
+            status: 'regression',
+          },
+        ],
+      },
+    });
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.createAnthropicProvider).toHaveBeenCalledWith('sk-test');
+    expect(hikakuMock.generateReport).toHaveBeenCalled();
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('LLM Report'));
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should not generate LLM report when report mode is off', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuReportMode = 'off';
+    mockConf.hikakuLlmApiKey = 'sk-test';
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'fail',
+      scenarios: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 0,
+        failed: 1,
+        regressions: [
+          {
+            metricName: 'p95_latency',
+            baselineValue: 0.5,
+            currentValue: 0.8,
+            deltaPercent: 60,
+            status: 'regression',
+          },
+        ],
+      },
+    });
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.generateReport).not.toHaveBeenCalled();
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should not generate LLM report when API key is missing', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuReportMode = 'on_fail';
+    mockConf.hikakuLlmApiKey = undefined;
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'fail',
+      scenarios: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 0,
+        failed: 1,
+        regressions: [
+          {
+            metricName: 'p95_latency',
+            baselineValue: 0.5,
+            currentValue: 0.8,
+            deltaPercent: 60,
+            status: 'regression',
+          },
+        ],
+      },
+    });
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.generateReport).not.toHaveBeenCalled();
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should save LLM report to file when report output is file', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuReportMode = 'always';
+    mockConf.hikakuReportOutput = 'file';
+    mockConf.hikakuReportFilePath = '/tmp/report.md';
+    mockConf.hikakuLlmApiKey = 'sk-test';
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'pass',
+      scenarios: [],
+      summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
+    });
+
+    await import('../main.js');
+
+    expect(hikakuMock.generateReport).toHaveBeenCalled();
+    expect(fsMock.writeFileSync).toHaveBeenCalledWith(
+      '/tmp/report.md',
+      '## LLM Report\n\nAll good!',
+      'utf-8'
+    );
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('LLM report saved to'));
   });
 });

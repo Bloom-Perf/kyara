@@ -85,6 +85,11 @@ describe('launchBrowsers', () => {
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
+      hikakuReportMode: 'on_fail' as const,
+      hikakuReportOutput: 'log' as const,
+      hikakuReportFilePath: './hikaku-report.md',
+      hikakuReportLocale: 'en' as const,
+      hikakuLlmApiKey: undefined,
     };
 
     // Setup mock logger

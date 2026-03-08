@@ -22,6 +22,12 @@ describe('createConf', () => {
     delete process.env.KYARA_HIKAKU_BASELINE_PATH;
     delete process.env.KYARA_HIKAKU_UPDATE_BASELINE;
     delete process.env.KYARA_HIKAKU_MAX_INCREASE_PERCENT;
+    delete process.env.KYARA_HIKAKU_REPORT_MODE;
+    delete process.env.KYARA_HIKAKU_REPORT_OUTPUT;
+    delete process.env.KYARA_HIKAKU_REPORT_FILE_PATH;
+    delete process.env.KYARA_HIKAKU_REPORT_LOCALE;
+    delete process.env.KYARA_HIKAKU_LLM_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
 
     const conf = createConf({});
 
@@ -34,6 +40,11 @@ describe('createConf', () => {
     expect(conf.hikakuBaselinePath).toBeUndefined();
     expect(conf.hikakuUpdateBaseline).toBe(false);
     expect(conf.hikakuMaxIncreasePercent).toBe(20);
+    expect(conf.hikakuReportMode).toBe('on_fail');
+    expect(conf.hikakuReportOutput).toBe('log');
+    expect(conf.hikakuReportFilePath).toBe('./hikaku-report.md');
+    expect(conf.hikakuReportLocale).toBe('en');
+    expect(conf.hikakuLlmApiKey).toBeUndefined();
   });
 
   it('should use environment variables when set', () => {
@@ -64,6 +75,22 @@ describe('createConf', () => {
     expect(conf.hikakuBaselinePath).toBe('/tmp/baseline.json');
     expect(conf.hikakuUpdateBaseline).toBe(true);
     expect(conf.hikakuMaxIncreasePercent).toBe(15);
+  });
+
+  it('should read hikaku report environment variables', () => {
+    process.env.KYARA_HIKAKU_REPORT_MODE = 'always';
+    process.env.KYARA_HIKAKU_REPORT_OUTPUT = 'file';
+    process.env.KYARA_HIKAKU_REPORT_FILE_PATH = '/tmp/report.md';
+    process.env.KYARA_HIKAKU_REPORT_LOCALE = 'fr';
+    process.env.KYARA_HIKAKU_LLM_API_KEY = 'sk-test-key';
+
+    const conf = createConf({});
+
+    expect(conf.hikakuReportMode).toBe('always');
+    expect(conf.hikakuReportOutput).toBe('file');
+    expect(conf.hikakuReportFilePath).toBe('/tmp/report.md');
+    expect(conf.hikakuReportLocale).toBe('fr');
+    expect(conf.hikakuLlmApiKey).toBe('sk-test-key');
   });
 
   it('should prefer overrides over environment variables', () => {
@@ -101,6 +128,11 @@ describe('logConf', () => {
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
+      hikakuReportMode: 'on_fail' as const,
+      hikakuReportOutput: 'log' as const,
+      hikakuReportFilePath: './hikaku-report.md',
+      hikakuReportLocale: 'en' as const,
+      hikakuLlmApiKey: undefined,
     };
 
     logConf(conf, mockLogger as any);
@@ -131,6 +163,11 @@ describe('logConf', () => {
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
+      hikakuReportMode: 'on_fail' as const,
+      hikakuReportOutput: 'log' as const,
+      hikakuReportFilePath: './hikaku-report.md',
+      hikakuReportLocale: 'en' as const,
+      hikakuLlmApiKey: undefined,
     };
 
     logConf(conf, mockLogger as any);
