@@ -17,6 +17,6 @@ declare module '@bloom-perf/yaml-pptr' {
 
   export function readYamlAndInterpret(
     yamlContent: string,
-    options?: ReadYamlOptions,
+    options?: ReadYamlOptions
   ): Promise<void>;
 }

@@ -203,7 +203,11 @@ describe('launchBrowsers', () => {
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    expect(mockMetricsEmitter.browserTabStarted).toHaveBeenCalledWith(Status.Success, 'Login Flow', 2);
+    expect(mockMetricsEmitter.browserTabStarted).toHaveBeenCalledWith(
+      Status.Success,
+      'Login Flow',
+      2
+    );
   });
 
   it('should register page event handlers', async () => {
@@ -252,7 +256,11 @@ describe('launchBrowsers', () => {
     const mockResponse = { url: () => 'https://example.com/api/test' } as HTTPResponse;
     pageEventHandlers['response'](mockResponse);
 
-    expect(mockMetricsEmitter.browserResponse).toHaveBeenCalledWith('example.com', 'My Scenario', 1);
+    expect(mockMetricsEmitter.browserResponse).toHaveBeenCalledWith(
+      'example.com',
+      'My Scenario',
+      1
+    );
   });
 
   it('should emit browserError and log when error event fires', async () => {
@@ -315,7 +323,11 @@ describe('launchBrowsers', () => {
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    expect(mockMetricsEmitter.browserTabStarted).toHaveBeenCalledWith(Status.Error, 'Test Scenario', 0);
+    expect(mockMetricsEmitter.browserTabStarted).toHaveBeenCalledWith(
+      Status.Error,
+      'Test Scenario',
+      0
+    );
     expect(mockLogger.error).toHaveBeenCalled();
   });
 
@@ -340,7 +352,10 @@ describe('launchBrowsers', () => {
     pageEventHandlers['requestfinished'](mockRequest);
 
     expect(mockMetricsEmitter.browserRequestDuration).toHaveBeenCalledWith(
-      'example.com', 'Latency Test', 0, expect.any(Number)
+      'example.com',
+      'Latency Test',
+      0,
+      expect.any(Number)
     );
   });
 

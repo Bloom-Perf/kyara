@@ -14,7 +14,12 @@ export type MetricsEmitter = {
   browserRequestFinished(hostname: string, scenario: string, iteration: number): void;
   browserRequestFailed(hostname: string, scenario: string, iteration: number): void;
   browserResponse(hostname: string, scenario: string, iteration: number): void;
-  browserRequestDuration(hostname: string, scenario: string, iteration: number, durationSec: number): void;
+  browserRequestDuration(
+    hostname: string,
+    scenario: string,
+    iteration: number,
+    durationSec: number
+  ): void;
   browserError(): void;
   resourcesConsumptionPerTab(browser: string, ram: number, cpu: number): void;
   resourcesConsumptionPerPod(browser: string, ram: number, cpu: number): void;
@@ -142,7 +147,12 @@ export const createMetricsEmitter = (registry: prom.Registry): MetricsEmitter =>
     browserResponse(hostname: string, scenario: string, iteration: number) {
       browserResponseCounter.inc({ hostname, scenario, iteration });
     },
-    browserRequestDuration(hostname: string, scenario: string, iteration: number, durationSec: number) {
+    browserRequestDuration(
+      hostname: string,
+      scenario: string,
+      iteration: number,
+      durationSec: number
+    ) {
       browserRequestDurationHisto.observe({ hostname, scenario, iteration }, durationSec);
     },
     browserError() {
