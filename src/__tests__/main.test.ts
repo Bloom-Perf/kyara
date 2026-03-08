@@ -9,6 +9,9 @@ describe('main module', () => {
     httpMetricsRoute: '/metrics',
     livenessProbeRoute: '/live',
     headless: true,
+    hikakuBaselinePath: undefined as string | undefined,
+    hikakuUpdateBaseline: false,
+    hikakuMaxIncreasePercent: 20,
   };
 
   const mockLogger = {
@@ -46,6 +49,7 @@ describe('main module', () => {
   let browserMock: any;
   let expressMock: any;
   let promClientMock: any;
+  let hikakuMock: any;
 
   beforeEach(async () => {
     // Reset modules before each test
@@ -98,6 +102,25 @@ describe('main module', () => {
       collectDefaultMetrics: jest.fn(),
     }));
 
+    jest.unstable_mockModule('@bloom-perf/hikaku', () => ({
+      createSnapshot: jest
+        .fn<any>()
+        .mockResolvedValue({ timestamp: 'test', scenarios: [], resources: [] }),
+      saveBaseline: jest.fn(),
+      loadBaseline: jest.fn(() => ({
+        version: 1,
+        createdAt: 'test',
+        snapshot: { timestamp: 'test', scenarios: [], resources: [] },
+      })),
+      baselineExists: jest.fn(() => false),
+      compare: jest.fn(() => ({
+        timestamp: 'test',
+        overallVerdict: 'pass',
+        scenarios: [],
+        summary: { totalScenarios: 0, passed: 0, failed: 0, regressions: [] },
+      })),
+    }));
+
     // Import mocked modules
     confMock = await import('../conf.js');
     loggerMock = await import('../logger.js');
@@ -105,6 +128,12 @@ describe('main module', () => {
     browserMock = await import('../browser.js');
     expressMock = await import('express');
     promClientMock = await import('prom-client');
+    hikakuMock = await import('@bloom-perf/hikaku');
+
+    // Reset hikaku-related mockConf fields
+    mockConf.hikakuBaselinePath = undefined;
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuMaxIncreasePercent = 20;
 
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -242,6 +271,16 @@ describe('main module', () => {
       collectDefaultMetrics: jest.fn(),
     }));
 
+    jest.unstable_mockModule('@bloom-perf/hikaku', () => ({
+      createSnapshot: jest
+        .fn<any>()
+        .mockResolvedValue({ timestamp: 'test', scenarios: [], resources: [] }),
+      saveBaseline: jest.fn(),
+      loadBaseline: jest.fn(),
+      baselineExists: jest.fn(() => false),
+      compare: jest.fn(),
+    }));
+
     await import('../main.js');
 
     // Wait for the promise rejection to be caught
@@ -250,5 +289,81 @@ describe('main module', () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining('Fatal error when launching browsers')
     );
+  });
+
+  it('should not call hikaku when hikakuBaselinePath is not set', async () => {
+    mockConf.hikakuBaselinePath = undefined;
+
+    await import('../main.js');
+
+    expect(hikakuMock.createSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('should save baseline when hikakuUpdateBaseline is true', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = true;
+
+    await import('../main.js');
+
+    expect(hikakuMock.createSnapshot).toHaveBeenCalledWith(mockRegistry);
+    expect(hikakuMock.saveBaseline).toHaveBeenCalledWith(
+      { timestamp: 'test', scenarios: [], resources: [] },
+      '/tmp/baseline.json'
+    );
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Hikaku: baseline saved'));
+  });
+
+  it('should compare against baseline when baseline exists and report pass', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'pass',
+      scenarios: [],
+      summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
+    });
+
+    await import('../main.js');
+
+    expect(hikakuMock.createSnapshot).toHaveBeenCalledWith(mockRegistry);
+    expect(hikakuMock.loadBaseline).toHaveBeenCalledWith('/tmp/baseline.json');
+    expect(hikakuMock.compare).toHaveBeenCalled();
+    expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('pass'));
+  });
+
+  it('should exit with code 1 when hikaku comparison fails', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'fail',
+      scenarios: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 0,
+        failed: 1,
+        regressions: [
+          {
+            metricName: 'p95_latency',
+            baselineValue: 0.5,
+            currentValue: 0.8,
+            deltaPercent: 60,
+            status: 'regression',
+          },
+        ],
+      },
+    });
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.compare).toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Hikaku regression'));
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+
+    processExitSpy.mockRestore();
   });
 });

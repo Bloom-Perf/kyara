@@ -8,6 +8,9 @@ export type Conf = {
   httpMetricsRoute: string;
   livenessProbeRoute: string;
   headless: boolean;
+  hikakuBaselinePath: string | undefined;
+  hikakuUpdateBaseline: boolean;
+  hikakuMaxIncreasePercent: number;
 };
 
 export type ConfOverrides = Partial<{
@@ -23,10 +26,10 @@ export const logConf = (conf: Conf, logger: Logger) => {
 
   logger.debug(
     Object.entries(conf)
-      .filter((v) => typeof v[1] !== 'function')
+      .filter((v) => typeof v[1] !== 'function' && v[1] !== undefined)
       .map(
         ([key, value]) =>
-          '\t- ' + chalk.blueBright(key) + '\t-> ' + chalk.yellowBright(value.toString())
+          '\t- ' + chalk.blueBright(key) + '\t-> ' + chalk.yellowBright(String(value))
       )
       .join('\n')
   );
@@ -43,5 +46,8 @@ export const createConf = (overrides: ConfOverrides): Conf => {
       overrides.livenessProbeRoute || process.env.KYARA_HTTP_LIVENESS_PROBE_ROUTE || '/live',
     httpMetricsRoute:
       overrides.httpMetricsRoute || process.env.KYARA_HTTP_METRICS_ROUTE || '/metrics',
+    hikakuBaselinePath: process.env.KYARA_HIKAKU_BASELINE_PATH || undefined,
+    hikakuUpdateBaseline: !!process.env.KYARA_HIKAKU_UPDATE_BASELINE,
+    hikakuMaxIncreasePercent: parseInt(process.env.KYARA_HIKAKU_MAX_INCREASE_PERCENT || '20'),
   };
 };
