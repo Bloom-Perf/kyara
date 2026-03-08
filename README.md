@@ -17,6 +17,7 @@
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [Performance Regression Detection (Hikaku)](#performance-regression-detection-hikaku)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -48,6 +49,8 @@ Kyara addresses these challenges by:
 | Realistic Traffic | Execute user-like interactions using headless browsers |
 | YAML Scenarios | Define and manage complex scenarios with straightforward syntax |
 | Prometheus Metrics | Monitor browser events, resource consumption, and HTTP interactions |
+| Regression Detection | Detect performance regressions with [hikaku](https://github.com/Bloom-Perf/hikaku) baseline comparison |
+| LLM Analysis | Generate natural language performance reports powered by an LLM |
 | Container Ready | Deploy via Docker or Helm in your CI/CD pipeline |
 
 ## Quick Start
@@ -140,6 +143,24 @@ helm install kyara-release ./kyara-0.0.1.tgz \
 | `KYARA_HTTP_LIVENESS_PROBE_ROUTE` | Health check endpoint | `/live` |
 | `KYARA_HEADLESS` | Run browser in headless mode | `false` |
 
+#### Hikaku (Performance Regression Detection)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KYARA_HIKAKU_BASELINE_PATH` | Path to the baseline JSON file. Enables hikaku when set | _(disabled)_ |
+| `KYARA_HIKAKU_UPDATE_BASELINE` | Save current metrics as the new baseline (instead of comparing) | `false` |
+| `KYARA_HIKAKU_MAX_INCREASE_PERCENT` | Maximum allowed metric increase before flagging a regression (%) | `20` |
+
+#### LLM Report
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KYARA_HIKAKU_REPORT_MODE` | When to generate a report: `off`, `on_fail`, `always` | `on_fail` |
+| `KYARA_HIKAKU_REPORT_OUTPUT` | Where to write the report: `log` or `file` | `log` |
+| `KYARA_HIKAKU_REPORT_FILE_PATH` | File path for the report (when output is `file`) | `./hikaku-report.md` |
+| `KYARA_HIKAKU_REPORT_LOCALE` | Report language: `en` or `fr` | `en` |
+| `KYARA_HIKAKU_LLM_API_KEY` | Anthropic API key for report generation. Falls back to `ANTHROPIC_API_KEY` | _(disabled)_ |
+
 ## Usage
 
 ### Defining a Scenario
@@ -165,6 +186,114 @@ curl http://localhost:3000/metrics
 
 # Liveness probe
 curl http://localhost:3000/live
+```
+
+## Performance Regression Detection (Hikaku)
+
+Kyara integrates [hikaku](https://github.com/Bloom-Perf/hikaku) to automatically detect performance regressions between runs. The workflow is:
+
+1. **Establish a baseline** — run a scenario and save a snapshot of the collected Prometheus metrics
+2. **Compare** — run the same scenario again and compare the new metrics against the baseline
+3. **Report** — optionally generate a natural language analysis report using an LLM
+
+A ready-to-run example is provided in the [`examples/`](examples/) directory.
+
+### Prerequisites
+
+```bash
+npm install
+npm run build
+npm run installFirefox
+```
+
+### Step 1 — Establish a Baseline
+
+Run the scenario and save the resulting metrics snapshot as a baseline:
+
+```bash
+KYARA_YAML_FILE_PATH=examples/scenario.yaml \
+KYARA_HEADLESS=true \
+KYARA_HIKAKU_BASELINE_PATH=examples/baseline.json \
+KYARA_HIKAKU_UPDATE_BASELINE=true \
+  node dist/main.js
+```
+
+This creates `examples/baseline.json` containing a snapshot of all Prometheus counters and histograms collected during the run.
+
+### Step 2 — Compare Against the Baseline
+
+Run the same scenario again, this time _without_ `KYARA_HIKAKU_UPDATE_BASELINE`. Kyara will compare the new metrics to the saved baseline:
+
+```bash
+KYARA_YAML_FILE_PATH=examples/scenario.yaml \
+KYARA_HEADLESS=true \
+KYARA_HIKAKU_BASELINE_PATH=examples/baseline.json \
+  node dist/main.js
+```
+
+If any metric has increased by more than 20% (default threshold), Kyara logs a warning for each regression and exits with code 1. You can adjust the threshold:
+
+```bash
+KYARA_HIKAKU_MAX_INCREASE_PERCENT=50   # allow up to 50% increase
+```
+
+### Step 3 — Generate an LLM Analysis Report
+
+When an Anthropic API key is available, Kyara can produce a human-readable performance report:
+
+```bash
+KYARA_YAML_FILE_PATH=examples/scenario.yaml \
+KYARA_HEADLESS=true \
+KYARA_HIKAKU_BASELINE_PATH=examples/baseline.json \
+KYARA_HIKAKU_REPORT_MODE=always \
+KYARA_HIKAKU_REPORT_OUTPUT=file \
+KYARA_HIKAKU_REPORT_FILE_PATH=examples/hikaku-report.md \
+KYARA_HIKAKU_REPORT_LOCALE=en \
+ANTHROPIC_API_KEY=sk-ant-... \
+  node dist/main.js
+```
+
+The generated report contains a concise summary of the comparison: which metrics changed, whether regressions were detected, and actionable recommendations.
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `REPORT_MODE` | `off` | Never generate a report |
+| | `on_fail` _(default)_ | Only when regressions are detected |
+| | `always` | After every comparison |
+| `REPORT_OUTPUT` | `log` _(default)_ | Print the report in the application logs |
+| | `file` | Write the report to `REPORT_FILE_PATH` |
+| `REPORT_LOCALE` | `en` _(default)_, `fr` | Language of the generated report |
+
+### Helper Script
+
+The [`examples/run.sh`](examples/run.sh) script wraps all three phases:
+
+```bash
+# Run the full baseline + compare workflow
+bash examples/run.sh all
+
+# Or run individual phases
+bash examples/run.sh baseline
+bash examples/run.sh compare
+bash examples/run.sh report     # requires ANTHROPIC_API_KEY
+```
+
+### CI Integration
+
+A typical CI pipeline would:
+
+1. Store the baseline JSON as a versioned artifact or in the repository
+2. Run the scenario and compare against the baseline on every push
+3. Fail the build if regressions are detected
+
+```yaml
+# Example GitHub Actions step
+- name: Performance regression check
+  run: |
+    KYARA_YAML_FILE_PATH=examples/scenario.yaml \
+    KYARA_HEADLESS=true \
+    KYARA_HIKAKU_BASELINE_PATH=examples/baseline.json \
+      node dist/main.js
 ```
 
 ## Contributing
