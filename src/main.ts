@@ -5,6 +5,7 @@ import { launchBrowsers } from './browser.js';
 import { createLogger } from './logger.js';
 import { collectDefaultMetrics } from 'prom-client';
 import * as hikaku from '@bloom-perf/hikaku';
+import { writeFileSync } from 'fs';
 
 (async () => {
   const conf = createConf({});
@@ -39,6 +40,32 @@ import * as hikaku from '@bloom-perf/hikaku';
       logger.info(
         `Hikaku: ${report.overallVerdict} (${report.summary.passed} passed, ${report.summary.failed} failed)`
       );
+
+      // LLM report generation
+      const shouldReport =
+        conf.hikakuReportMode === 'always' ||
+        (conf.hikakuReportMode === 'on_fail' && report.overallVerdict === 'fail');
+
+      if (shouldReport && conf.hikakuLlmApiKey) {
+        try {
+          const provider = hikaku.createAnthropicProvider(conf.hikakuLlmApiKey);
+          const llmReport = await hikaku.generateReport(report, snapshot, baseline, {
+            provider,
+            locale: conf.hikakuReportLocale,
+            format: 'markdown',
+          });
+
+          if (conf.hikakuReportOutput === 'file') {
+            writeFileSync(conf.hikakuReportFilePath, llmReport, 'utf-8');
+            logger.info('Hikaku: LLM report saved to ' + conf.hikakuReportFilePath);
+          } else {
+            logger.info('Hikaku LLM Report:\n' + llmReport);
+          }
+        } catch (err: unknown) {
+          logger.warn('Hikaku: LLM report generation failed: ' + err);
+        }
+      }
+
       if (report.overallVerdict === 'fail') {
         for (const r of report.summary.regressions) {
           logger.warn(`Hikaku regression: ${r.metricName} +${r.deltaPercent.toFixed(1)}%`);

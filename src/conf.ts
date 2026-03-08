@@ -11,6 +11,11 @@ export type Conf = {
   hikakuBaselinePath: string | undefined;
   hikakuUpdateBaseline: boolean;
   hikakuMaxIncreasePercent: number;
+  hikakuReportMode: 'off' | 'on_fail' | 'always';
+  hikakuReportOutput: 'log' | 'file';
+  hikakuReportFilePath: string;
+  hikakuReportLocale: 'en' | 'fr';
+  hikakuLlmApiKey: string | undefined;
 };
 
 export type ConfOverrides = Partial<{
@@ -49,5 +54,12 @@ export const createConf = (overrides: ConfOverrides): Conf => {
     hikakuBaselinePath: process.env.KYARA_HIKAKU_BASELINE_PATH || undefined,
     hikakuUpdateBaseline: !!process.env.KYARA_HIKAKU_UPDATE_BASELINE,
     hikakuMaxIncreasePercent: parseInt(process.env.KYARA_HIKAKU_MAX_INCREASE_PERCENT || '20'),
+    hikakuReportMode:
+      (process.env.KYARA_HIKAKU_REPORT_MODE as 'off' | 'on_fail' | 'always') || 'on_fail',
+    hikakuReportOutput: (process.env.KYARA_HIKAKU_REPORT_OUTPUT as 'log' | 'file') || 'log',
+    hikakuReportFilePath: process.env.KYARA_HIKAKU_REPORT_FILE_PATH || './hikaku-report.md',
+    hikakuReportLocale: (process.env.KYARA_HIKAKU_REPORT_LOCALE as 'en' | 'fr') || 'en',
+    hikakuLlmApiKey:
+      process.env.KYARA_HIKAKU_LLM_API_KEY || process.env.ANTHROPIC_API_KEY || undefined,
   };
 };
