@@ -1,4 +1,4 @@
-import puppeteer, { ConsoleMessage, Page, HTTPRequest, HTTPResponse } from 'puppeteer';
+import puppeteer, { HTTPRequest, HTTPResponse, ConsoleMessage, Page } from 'puppeteer';
 import { MetricsEmitter, Status } from './metrics.js';
 import chalk from 'chalk';
 import { Conf } from './conf.js';
@@ -6,17 +6,13 @@ import { Logger } from 'winston';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as yp from '@bloom-perf/yaml-pptr';
+import type { ScenarioContext } from '@bloom-perf/yaml-pptr';
 
 export const launchBrowsers = async (
   conf: Conf,
   logger: Logger,
   me: MetricsEmitter
 ): Promise<void> => {
-  const runScenarios = yp.readYamlAndInterpret(
-    fs.readFileSync(conf.yamlFilePath, { encoding: 'utf8' }),
-    logger
-  );
-
   // Run the node orchestrator
   logger.info(`Start browser`);
 
@@ -84,35 +80,57 @@ export const launchBrowsers = async (
   fetchTabsRamCpuConsumption();
 
   // Start all tabs and wait for completion
+  await yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: 'utf8' }), {
+    browsers: { firefox: browser },
+    logger,
+    onPage: async (tab: Page, ctx: ScenarioContext) => {
+      try {
+        const { scenarioName, iteration } = ctx;
+        logger.info(`Start browser page now! [scenario=${scenarioName}, iteration=${iteration}]`);
+        me.browserTabStarted(Status.Success, scenarioName, iteration);
 
-  await runScenarios(browser, async (tab: Page) => {
-    try {
-      logger.info(`Start browser page now!`);
-      me.browserTabStarted(Status.Success);
+        // Track request start times for latency measurement
+        const requestStartTimes = new Map<string, number>();
 
-      tab.on('request', (request: HTTPRequest) =>
-        me.browserRequest(new URL(request.url()).hostname)
-      );
-      tab.on('requestfinished', (request: HTTPRequest) =>
-        me.browserRequestFinished(new URL(request.url()).hostname)
-      );
-      tab.on('requestfailed', (request: HTTPRequest) =>
-        me.browserRequestFailed(new URL(request.url()).hostname)
-      );
-      tab.on('response', (response: HTTPResponse) =>
-        me.browserResponse(new URL(response.url()).hostname)
-      );
-      tab.on('error', (err: Error) => {
-        me.browserError();
-        logger.info(err.message, { ...err, tags: ['BROWSER_LOG', 'BROWSER_ERROR'] /*, url*/ });
-      });
-      tab.on('console', (msg: ConsoleMessage) => {
-        me.browserLogLine();
-        logger.info(msg.text(), { tags: ['BROWSER_LOG'] /*, url*/ });
-      });
-    } catch (err) {
-      me.browserTabStarted(Status.Error);
-      logger.error(`Error on page: ${chalk.redBright(err)}`);
-    }
+        tab.on('request', (request: HTTPRequest) => {
+          const hostname = new URL(request.url()).hostname;
+          me.browserRequest(hostname, scenarioName, iteration);
+          requestStartTimes.set(request.url(), Date.now());
+        });
+        tab.on('requestfinished', (request: HTTPRequest) => {
+          const hostname = new URL(request.url()).hostname;
+          me.browserRequestFinished(hostname, scenarioName, iteration);
+          const startTime = requestStartTimes.get(request.url());
+          if (startTime) {
+            me.browserRequestDuration(
+              hostname,
+              scenarioName,
+              iteration,
+              (Date.now() - startTime) / 1000
+            );
+            requestStartTimes.delete(request.url());
+          }
+        });
+        tab.on('requestfailed', (request: HTTPRequest) => {
+          const hostname = new URL(request.url()).hostname;
+          me.browserRequestFailed(hostname, scenarioName, iteration);
+          requestStartTimes.delete(request.url());
+        });
+        tab.on('response', (response: HTTPResponse) =>
+          me.browserResponse(new URL(response.url()).hostname, scenarioName, iteration)
+        );
+        tab.on('error', (err: Error) => {
+          me.browserError();
+          logger.info(err.message, { ...err, tags: ['BROWSER_LOG', 'BROWSER_ERROR'] });
+        });
+        tab.on('console', (msg: ConsoleMessage) => {
+          me.browserLogLine();
+          logger.info(msg.text(), { tags: ['BROWSER_LOG'] });
+        });
+      } catch (err) {
+        me.browserTabStarted(Status.Error, ctx.scenarioName, ctx.iteration);
+        logger.error(`Error on page: ${chalk.redBright(err)}`);
+      }
+    },
   });
 };

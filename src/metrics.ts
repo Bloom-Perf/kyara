@@ -7,13 +7,19 @@ export const enum Status {
 
 export type MetricsEmitter = {
   browserStarted(name: string, status: Status): void;
-  browserTabStarted(status: Status): void;
+  browserTabStarted(status: Status, scenario: string, iteration: number): void;
   tabDelayBeforeLaunch(nbSeconds: number): void;
   browserLogLine(): void;
-  browserRequest(hostname: string): void;
-  browserRequestFinished(hostname: string): void;
-  browserRequestFailed(hostname: string): void;
-  browserResponse(hostname: string): void;
+  browserRequest(hostname: string, scenario: string, iteration: number): void;
+  browserRequestFinished(hostname: string, scenario: string, iteration: number): void;
+  browserRequestFailed(hostname: string, scenario: string, iteration: number): void;
+  browserResponse(hostname: string, scenario: string, iteration: number): void;
+  browserRequestDuration(
+    hostname: string,
+    scenario: string,
+    iteration: number,
+    durationSec: number
+  ): void;
   browserError(): void;
   resourcesConsumptionPerTab(browser: string, ram: number, cpu: number): void;
   resourcesConsumptionPerPod(browser: string, ram: number, cpu: number): void;
@@ -32,7 +38,7 @@ export const createMetricsEmitter = (registry: prom.Registry): MetricsEmitter =>
   const startedBrowserTabCounter = new prom.Counter({
     name: 'browser_tab_started',
     help: 'Browser Tab started successfully',
-    labelNames: ['status'],
+    labelNames: ['status', 'scenario', 'iteration'],
     registers: [registry],
   });
 
@@ -51,26 +57,34 @@ export const createMetricsEmitter = (registry: prom.Registry): MetricsEmitter =>
   const browserRequestCounter = new prom.Counter({
     name: 'browser_request',
     help: 'When the browser initiates a http request',
-    labelNames: ['hostname'],
+    labelNames: ['hostname', 'scenario', 'iteration'],
     registers: [registry],
   });
   const browserRequestFinishedCounter = new prom.Counter({
     name: 'browser_request_finished',
     help: 'When the browser finishes successfully a http request',
-    labelNames: ['hostname'],
+    labelNames: ['hostname', 'scenario', 'iteration'],
     registers: [registry],
   });
   const browserRequestFailedCounter = new prom.Counter({
     name: 'browser_request_failed',
     help: 'When the browser fails a http request',
-    labelNames: ['hostname'],
+    labelNames: ['hostname', 'scenario', 'iteration'],
     registers: [registry],
   });
 
   const browserResponseCounter = new prom.Counter({
     name: 'browser_response',
     help: 'When the browser receives a response to its http request',
-    labelNames: ['hostname'],
+    labelNames: ['hostname', 'scenario', 'iteration'],
+    registers: [registry],
+  });
+
+  const browserRequestDurationHisto = new prom.Histogram({
+    name: 'browser_request_duration_seconds',
+    help: 'Duration of browser HTTP requests in seconds',
+    labelNames: ['hostname', 'scenario', 'iteration'],
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
     registers: [registry],
   });
 
@@ -112,8 +126,8 @@ export const createMetricsEmitter = (registry: prom.Registry): MetricsEmitter =>
     browserStarted(name, status) {
       startedBrowserCounter.inc({ browser: name, status });
     },
-    browserTabStarted(status) {
-      startedBrowserTabCounter.inc({ status });
+    browserTabStarted(status, scenario, iteration) {
+      startedBrowserTabCounter.inc({ status, scenario, iteration });
     },
     tabDelayBeforeLaunch(nbSeconds) {
       tabDelayBeforeLaunchCounter.inc(nbSeconds);
@@ -121,17 +135,25 @@ export const createMetricsEmitter = (registry: prom.Registry): MetricsEmitter =>
     browserLogLine() {
       browserLogLineCounter.inc();
     },
-    browserRequest(hostname: string) {
-      browserRequestCounter.inc({ hostname });
+    browserRequest(hostname: string, scenario: string, iteration: number) {
+      browserRequestCounter.inc({ hostname, scenario, iteration });
     },
-    browserRequestFinished(hostname: string) {
-      browserRequestFinishedCounter.inc({ hostname });
+    browserRequestFinished(hostname: string, scenario: string, iteration: number) {
+      browserRequestFinishedCounter.inc({ hostname, scenario, iteration });
     },
-    browserRequestFailed(hostname: string) {
-      browserRequestFailedCounter.inc({ hostname });
+    browserRequestFailed(hostname: string, scenario: string, iteration: number) {
+      browserRequestFailedCounter.inc({ hostname, scenario, iteration });
     },
-    browserResponse(hostname: string) {
-      browserResponseCounter.inc({ hostname });
+    browserResponse(hostname: string, scenario: string, iteration: number) {
+      browserResponseCounter.inc({ hostname, scenario, iteration });
+    },
+    browserRequestDuration(
+      hostname: string,
+      scenario: string,
+      iteration: number,
+      durationSec: number
+    ) {
+      browserRequestDurationHisto.observe({ hostname, scenario, iteration }, durationSec);
     },
     browserError() {
       browserErrorCounter.inc();
