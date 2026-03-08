@@ -1,3 +1,7 @@
 node_modules
 dist
 coverage
+
+# Generated example files
+examples/baseline.json
+examples/hikaku-report.md
