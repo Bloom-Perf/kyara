@@ -26,16 +26,18 @@ export type ConfOverrides = Partial<{
   headless: boolean;
 }>;
 
+const SENSITIVE_KEYS = new Set(['hikakuLlmApiKey']);
+
 export const logConf = (conf: Conf, logger: Logger) => {
   logger.debug('Starting Kyara server with the following configuration:');
 
   logger.debug(
     Object.entries(conf)
       .filter((v) => typeof v[1] !== 'function' && v[1] !== undefined)
-      .map(
-        ([key, value]) =>
-          '\t- ' + chalk.blueBright(key) + '\t-> ' + chalk.yellowBright(String(value))
-      )
+      .map(([key, value]) => {
+        const displayValue = SENSITIVE_KEYS.has(key) ? '***' : String(value);
+        return '\t- ' + chalk.blueBright(key) + '\t-> ' + chalk.yellowBright(displayValue);
+      })
       .join('\n')
   );
 };

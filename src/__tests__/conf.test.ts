@@ -177,4 +177,37 @@ describe('logConf', () => {
     expect(debugCalls[1]).toContain('yamlFilePath');
     expect(debugCalls[1]).toContain('httpPort');
   });
+
+  it('should mask sensitive configuration values', () => {
+    const debugCalls: string[] = [];
+    const mockLogger = {
+      debug: jest.fn((msg: string) => debugCalls.push(msg)),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    };
+
+    const conf: Conf = {
+      appName: 'my-app',
+      yamlFilePath: '/config/test.yaml',
+      httpPort: 8080,
+      httpMetricsRoute: '/metrics',
+      livenessProbeRoute: '/live',
+      headless: true,
+      hikakuBaselinePath: undefined,
+      hikakuUpdateBaseline: false,
+      hikakuMaxIncreasePercent: 20,
+      hikakuReportMode: 'on_fail' as const,
+      hikakuReportOutput: 'log' as const,
+      hikakuReportFilePath: './hikaku-report.md',
+      hikakuReportLocale: 'en' as const,
+      hikakuLlmApiKey: 'sk-ant-secret-key',
+    };
+
+    logConf(conf, mockLogger as any);
+
+    expect(debugCalls[1]).toContain('hikakuLlmApiKey');
+    expect(debugCalls[1]).toContain('***');
+    expect(debugCalls[1]).not.toContain('sk-ant-secret-key');
+  });
 });
