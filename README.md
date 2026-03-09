@@ -63,6 +63,9 @@ cd kyara
 # Install dependencies
 npm install
 
+# Install Firefox for Puppeteer
+npm run installFirefox
+
 # Run in development mode
 npm run start:dev
 ```
@@ -72,6 +75,7 @@ npm run start:dev
 ### Prerequisites
 
 - **Node.js** v22 or higher
+- **Firefox for Puppeteer** — Kyara uses headless Firefox to run scenarios. Install it with `npm run installFirefox`
 - **Docker** (for containerized deployments)
 - **Kubernetes** (for Helm deployments)
 
@@ -80,6 +84,9 @@ npm run start:dev
 ```bash
 # Install dependencies
 npm install
+
+# Install Firefox for Puppeteer (required to run scenarios)
+npm run installFirefox
 
 # Build the project
 npm run build

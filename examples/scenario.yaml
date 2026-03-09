@@ -1,28 +1,22 @@
 ##
-## Example Kyara scenario — search on Wikipedia
+## Example Kyara scenario — browse Wikipedia pages
 ##
-## This scenario simulates a user visiting Wikipedia, searching for a term,
-## and waiting a few seconds on the results page. It generates Prometheus
-## metrics (HTTP request/response counts, timings, resource usage) that can
-## then be analysed by hikaku.
+## This scenario simulates a user navigating through several Wikipedia pages,
+## generating Prometheus metrics (HTTP request/response counts, timings,
+## resource usage) that can then be analysed by hikaku.
 ##
 
 scenarios:
-  - name: wikipedia-search
-    location: https://en.wikipedia.org
+  - name: wikipedia-browse
+    location: https://en.wikipedia.org/wiki/Software_performance_testing
     workers: 1
     iterations: 1
     steps:
-      # Wait for the page to be fully loaded
-      - wait: 2
+      # Wait for the article to fully load
+      - wait: 3
 
-      # Type a search term in the search box
-      - input:
-          selector: "#searchInput"
-          text: "software performance testing"
+      # Navigate to a linked article
+      - navigate: https://en.wikipedia.org/wiki/Load_testing
 
-      # Submit the search form
-      - click: "#searchform button[type='submit']"
-
-      # Wait for the results page to load
+      # Wait for the second article to load
       - wait: 3

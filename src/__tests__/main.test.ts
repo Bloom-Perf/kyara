@@ -327,6 +327,8 @@ describe('main module', () => {
     mockConf.hikakuBaselinePath = '/tmp/baseline.json';
     mockConf.hikakuUpdateBaseline = true;
 
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
     await import('../main.js');
 
     expect(hikakuMock.createSnapshot).toHaveBeenCalledWith(mockRegistry);
@@ -335,6 +337,9 @@ describe('main module', () => {
       '/tmp/baseline.json'
     );
     expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Hikaku: baseline saved'));
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+
+    processExitSpy.mockRestore();
   });
 
   it('should compare against baseline when baseline exists and report pass', async () => {
@@ -348,12 +353,17 @@ describe('main module', () => {
       summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
     });
 
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
     await import('../main.js');
 
     expect(hikakuMock.createSnapshot).toHaveBeenCalledWith(mockRegistry);
     expect(hikakuMock.loadBaseline).toHaveBeenCalledWith('/tmp/baseline.json');
     expect(hikakuMock.compare).toHaveBeenCalled();
     expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('pass'));
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+
+    processExitSpy.mockRestore();
   });
 
   it('should exit with code 1 when hikaku comparison fails', async () => {
@@ -513,6 +523,8 @@ describe('main module', () => {
       summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
     });
 
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
     await import('../main.js');
 
     expect(hikakuMock.generateReport).toHaveBeenCalled();
@@ -522,5 +534,8 @@ describe('main module', () => {
       'utf-8'
     );
     expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('LLM report saved to'));
+    expect(processExitSpy).toHaveBeenCalledWith(0);
+
+    processExitSpy.mockRestore();
   });
 });

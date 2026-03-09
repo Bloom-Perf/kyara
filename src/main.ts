@@ -77,6 +77,8 @@ import { writeFileSync } from 'fs';
         'Hikaku: no baseline found at ' + conf.hikakuBaselinePath + ', skipping comparison'
       );
     }
+
+    process.exit(0);
   }
 
   // Start http server to expose prometheus metrics
