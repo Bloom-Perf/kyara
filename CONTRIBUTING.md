@@ -104,8 +104,7 @@ Example: `✨ Add support for custom browser arguments`
 ```
 kyara/
 ├── src/                  # Source code
-│   ├── __tests__/        # Test files
-│   └── types/            # TypeScript declarations
+│   └── __tests__/        # Test files
 ├── helm/                 # Kubernetes Helm chart
 ├── .github/              # GitHub Actions workflows
 └── [config files]        # Root configuration files

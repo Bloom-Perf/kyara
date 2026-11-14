@@ -8,7 +8,7 @@ Kyara is a load/stress testing tool that uses Puppeteer with Firefox headless br
 
 ## Build and Development Commands
 
-Requires **Node.js v22+**.
+Requires **Node.js v22.12+**.
 
 ```bash
 npm run build          # TypeScript compilation (outputs to dist/)
@@ -37,13 +37,16 @@ NODE_OPTIONS='--experimental-vm-modules' npx jest -t "pattern"
 
 Source code is in `src/` with a simple module structure:
 
-- **main.ts** - Entry point: initializes config, logger, metrics, launches browser, starts Express HTTP server
+- **main.ts** - Entry point: initializes config, logger, metrics, then either:
+  - server mode (default): starts the scenarios and, without waiting for them (they may never end, e.g. `waitForever`), the Express HTTP server exposing the metrics
+  - hikaku mode (`KYARA_HIKAKU_BASELINE_PATH`): runs the scenarios to completion, saves or compares the baseline, exits
 - **browser.ts** - Core simulation logic: launches Firefox, executes YAML scenarios, monitors CPU/RAM via shell commands, captures browser events (requests, responses, errors)
 - **conf.ts** - Configuration via environment variables (KYARA_* prefix)
 - **logger.ts** - Winston logger with ECS format for Elastic Stack compatibility
 - **metrics.ts** - Prometheus metrics: counters for events, histograms for resource consumption
-- **types/** - Type declarations for untyped dependencies
 - **__tests__/** - Jest unit tests
+
+Scenario failures (yaml-pptr 3): `readYamlAndInterpret` rejects with a `ConfigurationError` before anything runs (main.ts exits with code 1, like any error where nothing ran), or with an `AggregateError` once every scenario has run when some iterations failed (each failure is already logged by yaml-pptr; server mode keeps exposing the metrics, hikaku mode exits with code 1 without touching the baseline).
 
 Factory pattern is used throughout: `createConf()`, `createLogger()`, `createMetricsEmitter()`, `createPromRegister()`.
 
@@ -68,13 +71,14 @@ Key environment variables:
 
 ## Deployment
 
-- Docker multi-stage build defined in `Dockerfile`
+- Docker multi-stage build defined in `Dockerfile` (Firefox is installed explicitly with `npx puppeteer browsers install firefox`: Puppeteer does not download it by default)
 - Helm chart in `helm/` for Kubernetes deployment
 - Scenarios are mounted via ConfigMap from `helm/config/kyara.yml`
+- Every scenario must declare `browser: firefox` to run in Kyara's Firefox (yaml-pptr defaults to Chrome, which Kyara neither monitors nor ships)
 - GitHub Actions CI runs build and tests on push; releases publish to ghcr.io
 
 ## Dependencies
 
-- **Puppeteer v24** - Uses `browser: "firefox"` option (not `product`)
+- **Puppeteer v25** - Uses `browser: "firefox"` option (not `product`); also the peer dependency of yaml-pptr 3
 - **Chalk v5** - Pure ESM, requires ES modules
-- **@bloom-perf/yaml-pptr** - Published on npmjs.com (no authentication required)
+- **@bloom-perf/yaml-pptr v3** - Published on npmjs.com (no authentication required); ships its own TypeScript declarations and a JSON Schema of the YAML (`dist/schema.json`)
