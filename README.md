@@ -123,19 +123,25 @@ docker run -p 3000:3000 \
 ### Kubernetes Deployment (Helm)
 
 ```bash
-# Package the Helm chart
-helm package helm/
+# Install the chart, running the scenarios of helm/config/kyara.yml
+helm install kyara ./helm --namespace bloom-perf --create-namespace
 
-# Deploy the chart
-helm install kyara-release ./kyara-0.0.1.tgz \
-  --namespace bloom-perf \
-  --create-namespace
+# Or with your own scenario file
+helm install kyara ./helm --namespace bloom-perf --create-namespace \
+  --set-file 'scenarios.kyara\.yml=./my-scenarios.yml'
 
-# Customize via values.yaml or override parameters
-helm install kyara-release ./kyara-0.0.1.tgz \
-  --set replicaCount=3 \
-  --namespace bloom-perf
+# Change a value, e.g. the number of pods (each one runs every scenario)
+helm upgrade kyara ./helm --namespace bloom-perf --reuse-values --set replicaCount=3
 ```
+
+The chart (see its [values](helm/values.yaml)) deploys:
+
+- a **Deployment** whose pods run as uid `1000` without privileges, with liveness and readiness probes on `/live`, and `/dev/shm` in memory for the browsers (`shmSize`, 1 GiB by default, counted in the memory of the pod);
+- a **ConfigMap** with the scenario files, mounted in `/var/config`: changing them restarts the pods;
+- a **Service** with the `prometheus.io/*` annotations to scrape `/metrics`;
+- an **Ingress** on `/kyara` (`ingress.enabled`, nginx by default).
+
+Kyara's other environment variables go in `env`, with a `value` or a `valueFrom` (e.g. the Anthropic API key from a Secret).
 
 ## Configuration
 
