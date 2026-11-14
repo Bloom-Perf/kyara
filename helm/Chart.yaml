@@ -3,6 +3,6 @@ name: kyara
 description: Kyara simulates web traffic with real browsers (Firefox, Chrome) running YAML scenarios, and exposes Prometheus metrics
 type: application
 # Version of the chart: incremented on every change of the chart
-version: 0.2.0
+version: 0.2.1
 # Version of Kyara; the default image tag
-appVersion: "2.0.0"
+appVersion: "2.1.0"
