@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll, jest } from '@jest/globals';
-import { createConf, logConf, Conf } from '../conf.js';
+import { createConf, logConf, Conf, ConfError } from '../conf.js';
 
 describe('createConf', () => {
   const originalEnv = { ...process.env };
@@ -45,6 +45,7 @@ describe('createConf', () => {
     expect(conf.hikakuReportFilePath).toBe('./hikaku-report.md');
     expect(conf.hikakuReportLocale).toBe('en');
     expect(conf.hikakuLlmApiKey).toBeUndefined();
+    expect(conf.metricsIterationLabel).toBe(true);
   });
 
   it('should use environment variables when set', () => {
@@ -107,6 +108,85 @@ describe('createConf', () => {
     expect(conf.httpMetricsRoute).toBe('/custom-metrics');
     expect(conf.headless).toBe(true);
   });
+
+  it('should let a false override win over the environment', () => {
+    expect(createConf({ headless: false }, { KYARA_HEADLESS: 'true' }).headless).toBe(false);
+  });
+
+  it.each([
+    ['true', true],
+    ['TRUE', true],
+    ['1', true],
+    ['yes', true],
+    ['on', true],
+    ['false', false],
+    ['False', false],
+    ['0', false],
+    ['no', false],
+    ['off', false],
+    ['', false],
+    [' true ', true],
+  ])('should read KYARA_HEADLESS=%j as %s', (value, expected) => {
+    expect(createConf({}, { KYARA_HEADLESS: value }).headless).toBe(expected);
+  });
+
+  it('should read KYARA_HIKAKU_UPDATE_BASELINE=false as false', () => {
+    expect(createConf({}, { KYARA_HIKAKU_UPDATE_BASELINE: 'false' }).hikakuUpdateBaseline).toBe(
+      false
+    );
+  });
+
+  it('should accept a decimal maximum increase', () => {
+    expect(
+      createConf({}, { KYARA_HIKAKU_MAX_INCREASE_PERCENT: '12.5' }).hikakuMaxIncreasePercent
+    ).toBe(12.5);
+  });
+
+  it.each([
+    ['KYARA_HEADLESS', 'maybe', 'KYARA_HEADLESS="maybe" is not a boolean (true or false)'],
+    ['KYARA_HTTP_PORT', 'abc', 'KYARA_HTTP_PORT="abc" is not an integer between 0 and 65535'],
+    ['KYARA_HTTP_PORT', '70000', 'KYARA_HTTP_PORT="70000" is not an integer between 0 and 65535'],
+    ['KYARA_HTTP_PORT', '30.5', 'KYARA_HTTP_PORT="30.5" is not an integer between 0 and 65535'],
+    [
+      'KYARA_HIKAKU_MAX_INCREASE_PERCENT',
+      '-1',
+      'KYARA_HIKAKU_MAX_INCREASE_PERCENT="-1" is not a number >= 0',
+    ],
+    [
+      'KYARA_HIKAKU_REPORT_MODE',
+      'never',
+      'KYARA_HIKAKU_REPORT_MODE="never" is not one of: off, on_fail, always',
+    ],
+    [
+      'KYARA_HIKAKU_REPORT_OUTPUT',
+      'mail',
+      'KYARA_HIKAKU_REPORT_OUTPUT="mail" is not one of: log, file',
+    ],
+    ['KYARA_HIKAKU_REPORT_LOCALE', 'de', 'KYARA_HIKAKU_REPORT_LOCALE="de" is not one of: en, fr'],
+  ])('should reject %s=%j', (name, value, message) => {
+    expect(() => createConf({}, { [name]: value })).toThrow(new ConfError([message]));
+  });
+
+  it('should list every invalid value at once', () => {
+    expect(() => createConf({}, { KYARA_HEADLESS: 'maybe', KYARA_HTTP_PORT: 'abc' })).toThrow(
+      'Invalid configuration: KYARA_HEADLESS="maybe" is not a boolean (true or false); KYARA_HTTP_PORT="abc" is not an integer between 0 and 65535'
+    );
+  });
+
+  it('should drop the iteration label when KYARA_METRICS_ITERATION_LABEL=false', () => {
+    expect(createConf({}, { KYARA_METRICS_ITERATION_LABEL: 'false' }).metricsIterationLabel).toBe(
+      false
+    );
+  });
+
+  it('should require the iteration label in hikaku mode', () => {
+    expect(() =>
+      createConf(
+        {},
+        { KYARA_METRICS_ITERATION_LABEL: 'false', KYARA_HIKAKU_BASELINE_PATH: '/tmp/b.json' }
+      )
+    ).toThrow(/KYARA_METRICS_ITERATION_LABEL=false cannot be used with KYARA_HIKAKU_BASELINE_PATH/);
+  });
 });
 
 describe('logConf', () => {
@@ -125,6 +205,7 @@ describe('logConf', () => {
       httpMetricsRoute: '/metrics',
       livenessProbeRoute: '/live',
       headless: true,
+      metricsIterationLabel: true,
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
@@ -160,6 +241,7 @@ describe('logConf', () => {
       httpMetricsRoute: '/prom',
       livenessProbeRoute: '/health',
       headless: false,
+      metricsIterationLabel: true,
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
@@ -176,6 +258,8 @@ describe('logConf', () => {
     expect(debugCalls[1]).toContain('appName');
     expect(debugCalls[1]).toContain('yamlFilePath');
     expect(debugCalls[1]).toContain('httpPort');
+    // Plain text: colors would end up as escape codes in the JSON logs
+    expect(debugCalls[1]).not.toContain('\u001b[');
   });
 
   it('should mask sensitive configuration values', () => {
@@ -194,6 +278,7 @@ describe('logConf', () => {
       httpMetricsRoute: '/metrics',
       livenessProbeRoute: '/live',
       headless: true,
+      metricsIterationLabel: true,
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,

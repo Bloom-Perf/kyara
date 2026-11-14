@@ -141,6 +141,8 @@ helm install kyara-release ./kyara-0.0.1.tgz \
 
 ### Environment Variables
 
+Booleans are `true` or `false` (`1`/`0`, `yes`/`no` and `on`/`off` also work). Kyara does not start (exit code `1`) when a variable has an invalid value, and lists them all.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `KYARA_APP_NAME` | Application name | `kyara-puppet` |
@@ -149,6 +151,12 @@ helm install kyara-release ./kyara-0.0.1.tgz \
 | `KYARA_HTTP_METRICS_ROUTE` | Prometheus metrics endpoint | `/metrics` |
 | `KYARA_HTTP_LIVENESS_PROBE_ROUTE` | Health check endpoint | `/live` |
 | `KYARA_HEADLESS` | Run browser in headless mode | `false` |
+
+#### Metrics
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KYARA_METRICS_ITERATION_LABEL` | Label the scenario metrics with the iteration. Each iteration creates new series: set it to `false` for long runs with many iterations (not with hikaku, which compares iterations) | `true` |
 
 #### Hikaku (Performance Regression Detection)
 
@@ -195,7 +203,7 @@ See [yaml-pptr documentation](https://github.com/Bloom-Perf/yaml-pptr) for the f
 
 | What happens | Server mode (default) | Hikaku mode (`KYARA_HIKAKU_BASELINE_PATH` set) |
 |--------------|-----------------------|-----------------------------------------------|
-| Invalid configuration (YAML syntax, unknown key, missing environment variable), scenario file not found, Firefox not starting | Error logged, exit code `1` (nothing runs) | Same |
+| Invalid configuration (invalid `KYARA_*` value, YAML syntax, unknown key, missing environment variable), scenario file not found, Firefox not starting | Error logged, exit code `1` (nothing runs) | Same |
 | Some iterations fail (e.g. a selector not found) | Each failure is logged with its scenario, worker and iteration; the other iterations go on and the metrics stay exposed | Failures logged, then exit code `1`: the baseline is neither saved nor compared |
 
 ### Accessing Endpoints
@@ -209,6 +217,27 @@ curl http://localhost:3000/metrics
 # Liveness probe
 curl http://localhost:3000/live
 ```
+
+Kyara stops on `SIGTERM` (`docker stop`, Kubernetes) and `SIGINT` (Ctrl+C): it closes the browsers, then exits with code `0`, or `1` in hikaku mode since the run was interrupted.
+
+### Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `browser_started` | counter | `browser`, `status` | Browsers launched by Kyara (`success` or `error`) |
+| `browser_tab_started` | counter | `status`, `scenario`, `iteration` | Pages opened by the scenario iterations |
+| `browser_request`, `browser_request_finished`, `browser_request_failed` | counter | `hostname`, `scenario`, `iteration` | HTTP requests sent, finished, failed |
+| `browser_response` | counter | `hostname`, `scenario`, `iteration` | HTTP responses received |
+| `browser_request_duration_seconds` | histogram | `hostname`, `scenario`, `iteration` | Duration of the finished requests |
+| `browser_error` | counter | | Page crashes |
+| `browser_log_line` | counter | | Console messages of the pages (also logged) |
+| `dsd_tab_cpu_percent`, `dsd_tab_ram_kb` | histogram | `browser` | CPU (% of one core) and memory (kB) of each browser process rendering pages, sampled every 5 s |
+| `dsd_pod_cpu_percent`, `dsd_pod_ram_kb` | histogram | `browser` | The same for the whole browser (all its processes) |
+
+Every metric, including the Node.js metrics of prom-client, has an `app` label (`KYARA_APP_NAME`).
+
+- The CPU and memory are read from `/proc`: they are measured on Linux only (e.g. in the Docker image), for Kyara's Firefox, while the scenarios run. The memory is the proportional set size (PSS): the pages shared by several processes are split between them, so the memory of the whole browser is not overstated.
+- The `iteration` label creates new series for each iteration: see `KYARA_METRICS_ITERATION_LABEL`.
 
 ## Performance Regression Detection (Hikaku)
 
