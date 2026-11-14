@@ -82,3 +82,9 @@ Key environment variables:
 - **Puppeteer v25** - Uses `browser: "firefox"` option (not `product`); also the peer dependency of yaml-pptr 3
 - **Chalk v5** - Pure ESM, requires ES modules
 - **@bloom-perf/yaml-pptr v3** - Published on npmjs.com (no authentication required); ships its own TypeScript declarations and a JSON Schema of the YAML (`dist/schema.json`)
+
+## Helm Chart
+
+- `helm/`: Deployment (non-root, probes on the liveness route, `/dev/shm` in memory), ConfigMap of scenario files mounted in `/var/config` (the files of `helm/config/`, or the `scenarios` value), Service with `prometheus.io/*` annotations, optional Ingress
+- The chart sets `KYARA_YAML_FILE_PATH`, `KYARA_HTTP_PORT` and the HTTP routes from its values; other variables go in `env`
+- `helm/templates` is excluded from Prettier, which breaks Go templates; CI runs `helm lint --strict` and validates the rendered manifests with kubeconform (`.github/workflows/helm.yml`)

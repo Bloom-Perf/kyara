@@ -2,75 +2,88 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "kyara.fullname" . }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kyara.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "kyara.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # Restarts the pods when the scenarios change
+        checksum/scenarios: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "kyara.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
-        fsGroup: 472
-        supplementalGroups:
-          - 0
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           env:
+            - name: KYARA_YAML_FILE_PATH
+              value: {{ printf "/var/config/%s" .Values.scenarioFile | quote }}
+            - name: KYARA_HTTP_PORT
+              value: {{ .Values.http.port | quote }}
+            - name: KYARA_HTTP_METRICS_ROUTE
+              value: {{ .Values.http.metricsPath | quote }}
+            - name: KYARA_HTTP_LIVENESS_PROBE_ROUTE
+              value: {{ .Values.http.livenessPath | quote }}
             {{- range .Values.env }}
             - name: {{ .name }}
-              value: {{ .value }}
-            {{ end }}
+              {{- if hasKey . "value" }}
+              value: {{ .value | quote }}
+              {{- else }}
+              {{- omit . "name" | toYaml | nindent 14 }}
+              {{- end }}
+            {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.containerPort }}
+              containerPort: {{ .Values.http.port }}
               protocol: TCP
+          # The browsers can keep the CPU busy: generous timeout
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.http.livenessPath }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.http.livenessPath }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
           volumeMounts:
-            {{ range $path, $bytes := .Files.Glob "config/**" }}
-            - name: config-files-multipart
-              mountPath: {{ printf "/var/config/%s" (trimPrefix "config/" $path) | quote }}
-              subPath: {{ sha256sum $path | quote }}
-            {{ end }}
-
-          #volumeMounts:
-          #  {{- range .Values.volumes }}
-          #  - name: {{ .name }}
-          #    mountPath: {{ .mountPath }}
-          #    subPath: {{ .subPath }}
-          #  {{ end }}
+            - name: scenarios
+              mountPath: /var/config
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      imagePullSecrets:
-        - name: {{ .Values.imagePullSecrets }}
       volumes:
-        - name: config-files-multipart
+        - name: scenarios
           configMap:
-            name: {{ .Values.configName }}
-        {{- range .Values.volumes }}
-        - name: {{ .name }}
-          {{ if .persistentVolumeClaim }}
-          persistentVolumeClaim:
-            claimName: {{ .name }}
-          {{ end }}
-          #          {{ if .azureFile }}
-          #          azureFile:
-          #            secretName: {{ .azureFile.secretName }}
-          #            shareName: {{ .azureFile.shareName }}
-          #          {{ end }}
-          {{ if .configMap }}
-          configMap:
-            name: {{ .configMap.name }}
-          {{ end }}
-        {{ end }}
+            name: {{ include "kyara.fullname" . }}-scenarios
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.shmSize }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

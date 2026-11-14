@@ -1,17 +1,52 @@
-namespace: bloom-perf
-app: kyara
-
+# Number of pods: each one runs every scenario of the scenario file
 replicaCount: 1
 
 image:
   repository: ghcr.io/bloom-perf/kyara
   pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion.
+  # Overrides the image tag whose default is the chart appVersion
   tag: latest
-containerPort: 3000
+
+# Secrets to pull the image from a private registry, e.g. [{ name: my-registry }]
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Scenario files, by file name, mounted in /var/config. When empty, the files of the
+# chart's config/ directory. E.g. --set-file 'scenarios.kyara\.yml=./my-scenarios.yml'
+scenarios: {}
+# The scenario file run by Kyara (KYARA_YAML_FILE_PATH)
+scenarioFile: kyara.yml
+
+# Kyara's HTTP server: port (KYARA_HTTP_PORT), Prometheus metrics (KYARA_HTTP_METRICS_ROUTE)
+# and liveness (KYARA_HTTP_LIVENESS_PROBE_ROUTE, used by the probes)
+http:
+  port: 3000
+  metricsPath: /metrics
+  livenessPath: /live
+
+# Other environment variables of Kyara (see the README), with a value or a valueFrom, e.g.
+#   - name: KYARA_HIKAKU_LLM_API_KEY
+#     valueFrom: { secretKeyRef: { name: anthropic, key: api-key } }
+env:
+  - name: KYARA_APP_NAME
+    value: kyara-puppet
+
 service:
   type: ClusterIP
   port: 9090
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  paths:
+    - path: /kyara(/|$)(.*)
+      pathType: ImplementationSpecific
+
 resources:
   limits:
     cpu: 2
@@ -20,54 +55,22 @@ resources:
     cpu: 1
     memory: 2048Mi
 
-ingress:
-  className: ""
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-  paths:
-    - path: /kyara(/|$)(.*)
+# The browsers share memory through /dev/shm, mounted in memory with this size limit
+# (counted in the memory of the container)
+shmSize: 1Gi
 
-imagePullSecrets: "image pull secret to change"
-nameOverride: ""
-fullnameOverride: ""
-
-configName: kyara-config
-volumes:
-  - name: kyara-config-volume
-    mountPath: /var/config
-    subPath: kyara.yml
-    configMap:
-      name: kyara-config
-      defaultMode: 777
-env:
-  - name: KYARA_YAML_FILE_PATH
-    value: /var/config/kyara.yml
-  - name: KYARA_APP_NAME
-    value: kyara-puppet
-  - name: KYARA_HTTP_LIVENESS_PROBE_ROUTE
-    value: /live
-  - name: KYARA_HTTP_METRICS_ROUTE
-    value: /metrics
-  - name: KYARA_HTTP_PORT
-    value: 9090
 podAnnotations: {}
-podSecurityContext: {}
-securityContext: {}
-
-restartPolicy: Never
-ttlSecondsAfterFinished: 10
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+# The image runs as the "node" user (uid 1000)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
 
 nodeSelector: {}
-
-tolerations: {}
-
+tolerations: []
 affinity: {}
