@@ -5,7 +5,7 @@ image:
   repository: ghcr.io/bloom-perf/kyara
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion
-  tag: latest
+  tag: latest@sha256:377da1a0ffa517da0bf9734af370db4d3eeeab81f593196ff2a1c9330c44cf02
 
 # Secrets to pull the image from a private registry, e.g. [{ name: my-registry }]
 imagePullSecrets: []
