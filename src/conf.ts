@@ -15,11 +15,15 @@ export type Conf = {
   hikakuBaselinePath: string | undefined;
   hikakuUpdateBaseline: boolean;
   hikakuMaxIncreasePercent: number;
+  hikakuMaxErrorRateIncreasePercent: number;
+  hikakuMaxResourceIncreasePercent: number;
   hikakuReportMode: (typeof REPORT_MODES)[number];
   hikakuReportOutput: (typeof REPORT_OUTPUTS)[number];
   hikakuReportFilePath: string;
   hikakuReportLocale: (typeof REPORT_LOCALES)[number];
   hikakuLlmApiKey: string | undefined;
+  /** Model of the LLM report; undefined: hikaku's default */
+  hikakuLlmModel: string | undefined;
 };
 
 export type ConfOverrides = Partial<
@@ -125,11 +129,22 @@ export const createConf = (
     hikakuBaselinePath: env.KYARA_HIKAKU_BASELINE_PATH?.trim() || undefined,
     hikakuUpdateBaseline: e.boolean('KYARA_HIKAKU_UPDATE_BASELINE', false),
     hikakuMaxIncreasePercent: e.number('KYARA_HIKAKU_MAX_INCREASE_PERCENT', 20, { min: 0 }),
+    hikakuMaxErrorRateIncreasePercent: e.number(
+      'KYARA_HIKAKU_MAX_ERROR_RATE_INCREASE_PERCENT',
+      10,
+      {
+        min: 0,
+      }
+    ),
+    hikakuMaxResourceIncreasePercent: e.number('KYARA_HIKAKU_MAX_RESOURCE_INCREASE_PERCENT', 20, {
+      min: 0,
+    }),
     hikakuReportMode: e.oneOf('KYARA_HIKAKU_REPORT_MODE', REPORT_MODES, 'on_fail'),
     hikakuReportOutput: e.oneOf('KYARA_HIKAKU_REPORT_OUTPUT', REPORT_OUTPUTS, 'log'),
     hikakuReportFilePath: e.string('KYARA_HIKAKU_REPORT_FILE_PATH', './hikaku-report.md'),
     hikakuReportLocale: e.oneOf('KYARA_HIKAKU_REPORT_LOCALE', REPORT_LOCALES, 'en'),
     hikakuLlmApiKey: env.KYARA_HIKAKU_LLM_API_KEY || env.ANTHROPIC_API_KEY || undefined,
+    hikakuLlmModel: env.KYARA_HIKAKU_LLM_MODEL?.trim() || undefined,
   };
 
   if (conf.hikakuBaselinePath && !conf.metricsIterationLabel) {

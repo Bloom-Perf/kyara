@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { createSnapshot } from '@bloom-perf/hikaku';
 import { createPromRegister, createMetricsEmitter, Status } from '../metrics.js';
-import type { Registry } from 'prom-client';
+import type { Registry } from '@prometheus-io/client';
 
 describe('createPromRegister', () => {
   it('should create a Prometheus registry', () => {

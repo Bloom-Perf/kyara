@@ -176,7 +176,9 @@ Booleans are `true` or `false` (`1`/`0`, `yes`/`no` and `on`/`off` also work). K
 |----------|-------------|---------|
 | `KYARA_HIKAKU_BASELINE_PATH` | Path to the baseline JSON file. Enables hikaku when set | _(disabled)_ |
 | `KYARA_HIKAKU_UPDATE_BASELINE` | Save current metrics as the new baseline (instead of comparing) | `false` |
-| `KYARA_HIKAKU_MAX_INCREASE_PERCENT` | Maximum allowed metric increase before flagging a regression (%) | `20` |
+| `KYARA_HIKAKU_MAX_INCREASE_PERCENT` | Maximum allowed increase of the p50 and p95 latency of a scenario iteration (%) | `20` |
+| `KYARA_HIKAKU_MAX_ERROR_RATE_INCREASE_PERCENT` | Maximum allowed increase of the error rate of a scenario iteration (%, relative: from 0, any error fails) | `10` |
+| `KYARA_HIKAKU_MAX_RESOURCE_INCREASE_PERCENT` | Maximum allowed increase of the mean CPU and memory of each browser (%) | `20` |
 
 #### LLM Report
 
@@ -187,6 +189,7 @@ Booleans are `true` or `false` (`1`/`0`, `yes`/`no` and `on`/`off` also work). K
 | `KYARA_HIKAKU_REPORT_FILE_PATH` | File path for the report (when output is `file`) | `./hikaku-report.md` |
 | `KYARA_HIKAKU_REPORT_LOCALE` | Report language: `en` or `fr` | `en` |
 | `KYARA_HIKAKU_LLM_API_KEY` | Anthropic API key for report generation. Falls back to `ANTHROPIC_API_KEY` | _(disabled)_ |
+| `KYARA_HIKAKU_LLM_MODEL` | Claude model writing the report | hikaku's default (`claude-sonnet-5-5`) |
 
 ## Usage
 
@@ -294,10 +297,25 @@ KYARA_HIKAKU_BASELINE_PATH=examples/baseline.json \
   node dist/main.js
 ```
 
-If any metric has increased by more than 20% (default threshold), Kyara logs a warning for each regression and exits with code 1. You can adjust the threshold:
+Hikaku compares each scenario iteration (p50 and p95 latency, error rate) and, when both runs measured them (on Linux, e.g. in the Docker image), the mean CPU and memory of each browser. Kyara exits with code 1 when:
+
+- a metric increased beyond its threshold (20% by default for latency and resources, 10% for the error rate);
+- scenario iterations of the baseline did not run (e.g. a scenario renamed, fewer iterations): the runs are not comparable, update the baseline.
+
+Each regression is logged with where it happened:
+
+```
+Hikaku: fail (3 scenario iterations passed, 1 failed; 2 browsers compared)
+Hikaku regression: scenario "Login" iteration 0: p95_latency +35.2% (0.42 -> 0.57)
+Hikaku regression: firefox: mean_browser_ram_kb +27.0% (937000 -> 1190000)
+```
+
+You can adjust the thresholds:
 
 ```bash
-KYARA_HIKAKU_MAX_INCREASE_PERCENT=50   # allow up to 50% increase
+KYARA_HIKAKU_MAX_INCREASE_PERCENT=50            # latency: allow up to 50% increase
+KYARA_HIKAKU_MAX_ERROR_RATE_INCREASE_PERCENT=0  # no more errors than the baseline
+KYARA_HIKAKU_MAX_RESOURCE_INCREASE_PERCENT=30   # CPU and memory of the browsers
 ```
 
 ### Step 3 — Generate an LLM Analysis Report
