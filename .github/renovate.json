@@ -16,6 +16,13 @@
   ],
   "packageRules": [
     {
+      "description": "Kyara's own image: the Helm chart deploys its appVersion, set when releasing",
+      "matchPackageNames": [
+        "ghcr.io/bloom-perf/kyara"
+      ],
+      "enabled": false
+    },
+    {
       "matchUpdateTypes": [
         "major"
       ],

@@ -3,9 +3,10 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/bloom-perf/kyara
-  pullPolicy: Always
-  # Overrides the image tag whose default is the chart appVersion
-  tag: latest
+  pullPolicy: IfNotPresent
+  # Image tag; empty: the chart appVersion, the Kyara release the chart comes with.
+  # To follow the latest release instead: tag latest, pullPolicy Always
+  tag: ""
 
 # Secrets to pull the image from a private registry, e.g. [{ name: my-registry }]
 imagePullSecrets: []

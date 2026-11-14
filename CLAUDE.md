@@ -91,4 +91,5 @@ Key environment variables:
 
 - `helm/`: Deployment (non-root, probes on the liveness route, `/dev/shm` in memory), ConfigMap of scenario files mounted in `/var/config` (the files of `helm/config/`, or the `scenarios` value), Service with `prometheus.io/*` annotations, optional Ingress
 - The chart sets `KYARA_YAML_FILE_PATH`, `KYARA_HTTP_PORT` and the HTTP routes from its values; other variables go in `env`
+- The image tag defaults to the chart `appVersion`: a release PR sets the same version in `package.json` and `appVersion` (and bumps the chart `version`); Renovate ignores Kyara's own image
 - `helm/templates` is excluded from Prettier, which breaks Go templates; CI runs `helm lint --strict` and validates the rendered manifests with kubeconform (`.github/workflows/helm.yml`)

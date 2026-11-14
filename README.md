@@ -142,7 +142,7 @@ helm upgrade kyara ./helm --namespace bloom-perf --reuse-values --set replicaCou
 
 The chart (see its [values](helm/values.yaml)) deploys:
 
-- a **Deployment** whose pods run as uid `1000` without privileges, with liveness and readiness probes on `/live`, and `/dev/shm` in memory for the browsers (`shmSize`, 1 GiB by default, counted in the memory of the pod);
+- a **Deployment** of the image of the Kyara release the chart comes with (its `appVersion`; `--set image.tag=latest,image.pullPolicy=Always` follows the latest release instead), whose pods run as uid `1000` without privileges, with liveness and readiness probes on `/live`, and `/dev/shm` in memory for the browsers (`shmSize`, 1 GiB by default, counted in the memory of the pod);
 - a **ConfigMap** with the scenario files, mounted in `/var/config`: changing them restarts the pods;
 - a **Service** with the `prometheus.io/*` annotations to scrape `/metrics`;
 - an **Ingress** on `/kyara` (`ingress.enabled`, nginx by default).
