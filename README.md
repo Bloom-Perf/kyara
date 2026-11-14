@@ -197,9 +197,9 @@ scenarios:
       - waitForever
 ```
 
-This example instructs Kyara to navigate to the URL in its Firefox and wait indefinitely. You can define multiple scenarios with various actions (click, navigate, wait) to simulate complex user behaviors; they all start at the same time.
+This example instructs Kyara to navigate to the URL in Firefox and wait indefinitely. You can define multiple scenarios with various actions (click, navigate, wait) to simulate complex user behaviors; they all start at the same time.
 
-- **`browser:`** chooses the browser of each scenario: `firefox` or `chrome` (the default). Scenarios with `browser: firefox` run in the Firefox launched and monitored by Kyara (CPU/RAM metrics); the others run in a Chrome launched by yaml-pptr, whose CPU/RAM is not measured.
+- **`browser:`** chooses the browser of each scenario: `firefox` or `chrome` (the default). Only the browsers the scenarios use are launched, once each, and Kyara measures the CPU and memory of each one.
 - The **first line** enables completion and validation in editors using the [YAML extension for VS Code](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (or any `yaml-language-server` client).
 - The configuration is **strict**: an unknown key (e.g. `iteration:` instead of `iterations:`) is an error.
 
@@ -209,8 +209,8 @@ See [yaml-pptr documentation](https://github.com/Bloom-Perf/yaml-pptr) for the f
 
 | What happens | Server mode (default) | Hikaku mode (`KYARA_HIKAKU_BASELINE_PATH` set) |
 |--------------|-----------------------|-----------------------------------------------|
-| Invalid configuration (invalid `KYARA_*` value, YAML syntax, unknown key, missing environment variable), scenario file not found, Firefox not starting | Error logged, exit code `1` (nothing runs) | Same |
-| Some iterations fail (e.g. a selector not found) | Each failure is logged with its scenario, worker and iteration; the other iterations go on and the metrics stay exposed | Failures logged, then exit code `1`: the baseline is neither saved nor compared |
+| Invalid configuration (invalid `KYARA_*` value, YAML syntax, unknown key, missing environment variable), scenario file not found | Error logged, exit code `1` (nothing runs) | Same |
+| Some iterations fail (e.g. a selector not found), or a browser does not start (its scenarios fail) | Each failure is logged with its scenario, worker and iteration; the other iterations go on and the metrics stay exposed | Failures logged, then exit code `1`: the baseline is neither saved nor compared |
 
 ### Accessing Endpoints
 
@@ -230,7 +230,7 @@ Kyara stops on `SIGTERM` (`docker stop`, Kubernetes) and `SIGINT` (Ctrl+C): it c
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `browser_started` | counter | `browser`, `status` | Browsers launched by Kyara (`success` or `error`) |
+| `browser_started` | counter | `browser`, `status` | Browsers launched for the scenarios (`success` or `error`) |
 | `browser_tab_started` | counter | `status`, `scenario`, `iteration` | Pages opened by the scenario iterations |
 | `browser_request`, `browser_request_finished`, `browser_request_failed` | counter | `hostname`, `scenario`, `iteration` | HTTP requests sent, finished, failed |
 | `browser_response` | counter | `hostname`, `scenario`, `iteration` | HTTP responses received |
@@ -242,7 +242,7 @@ Kyara stops on `SIGTERM` (`docker stop`, Kubernetes) and `SIGINT` (Ctrl+C): it c
 
 Every metric, including the Node.js metrics of prom-client, has an `app` label (`KYARA_APP_NAME`).
 
-- The CPU and memory are read from `/proc`: they are measured on Linux only (e.g. in the Docker image), for Kyara's Firefox, while the scenarios run. The memory is the proportional set size (PSS): the pages shared by several processes are split between them, so the memory of the whole browser is not overstated.
+- The CPU and memory are read from `/proc`: they are measured on Linux only (e.g. in the Docker image), for each browser, while its scenarios run. The memory is the proportional set size (PSS): the pages shared by several processes are split between them, so the memory of the whole browser is not overstated.
 - The `iteration` label creates new series for each iteration: see `KYARA_METRICS_ITERATION_LABEL`.
 
 ## Performance Regression Detection (Hikaku)
