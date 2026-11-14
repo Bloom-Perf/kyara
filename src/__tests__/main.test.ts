@@ -19,11 +19,14 @@ describe('main module', () => {
     hikakuBaselinePath: undefined as string | undefined,
     hikakuUpdateBaseline: false,
     hikakuMaxIncreasePercent: 20,
+    hikakuMaxErrorRateIncreasePercent: 10,
+    hikakuMaxResourceIncreasePercent: 20,
     hikakuReportMode: 'on_fail' as 'off' | 'on_fail' | 'always',
     hikakuReportOutput: 'log' as 'log' | 'file',
     hikakuReportFilePath: './hikaku-report.md',
     hikakuReportLocale: 'en' as 'en' | 'fr',
     hikakuLlmApiKey: undefined as string | undefined,
+    hikakuLlmModel: undefined as string | undefined,
   };
 
   const mockLogger = {
@@ -119,7 +122,7 @@ describe('main module', () => {
       default: jest.fn(() => mockApp),
     }));
 
-    jest.unstable_mockModule('prom-client', () => ({
+    jest.unstable_mockModule('@prometheus-io/client', () => ({
       collectDefaultMetrics: jest.fn(),
     }));
 
@@ -138,7 +141,16 @@ describe('main module', () => {
         timestamp: 'test',
         overallVerdict: 'pass',
         scenarios: [],
-        summary: { totalScenarios: 0, passed: 0, failed: 0, regressions: [] },
+        resources: [],
+        summary: {
+          totalScenarios: 0,
+          passed: 0,
+          failed: 0,
+          regressions: [],
+          missingScenarios: [],
+          newScenarios: [],
+          missingBrowsers: [],
+        },
       })),
       generateReport: jest.fn<AsyncFn>().mockResolvedValue('## LLM Report\n\nAll good!'),
       createAnthropicProvider: jest.fn(() => ({ complete: jest.fn() })),
@@ -154,7 +166,7 @@ describe('main module', () => {
     metricsMock = await import('../metrics.js');
     browserMock = await import('../browser.js');
     expressMock = await import('express');
-    promClientMock = await import('prom-client');
+    promClientMock = await import('@prometheus-io/client');
     hikakuMock = await import('@bloom-perf/hikaku');
     fsMock = await import('fs');
 
@@ -162,11 +174,14 @@ describe('main module', () => {
     mockConf.hikakuBaselinePath = undefined;
     mockConf.hikakuUpdateBaseline = false;
     mockConf.hikakuMaxIncreasePercent = 20;
+    mockConf.hikakuMaxErrorRateIncreasePercent = 10;
+    mockConf.hikakuMaxResourceIncreasePercent = 20;
     mockConf.hikakuReportMode = 'on_fail';
     mockConf.hikakuReportOutput = 'log';
     mockConf.hikakuReportFilePath = './hikaku-report.md';
     mockConf.hikakuReportLocale = 'en';
     mockConf.hikakuLlmApiKey = undefined;
+    mockConf.hikakuLlmModel = undefined;
     mockConf.metricsIterationLabel = true;
   });
 
@@ -444,7 +459,16 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'pass',
       scenarios: [],
-      summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
+      resources: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 1,
+        failed: 0,
+        regressions: [],
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
+      },
     });
 
     const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -468,7 +492,11 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'fail',
       scenarios: [],
+      resources: [],
       summary: {
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
         totalScenarios: 1,
         passed: 0,
         failed: 1,
@@ -479,6 +507,8 @@ describe('main module', () => {
             currentValue: 0.8,
             deltaPercent: 60,
             status: 'regression',
+            scenario: 'Login',
+            iteration: 2,
           },
         ],
       },
@@ -489,8 +519,100 @@ describe('main module', () => {
     await import('../main.js');
 
     expect(hikakuMock.compare).toHaveBeenCalled();
-    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Hikaku regression'));
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Hikaku regression: scenario "Login" iteration 2: p95_latency +60.0% (0.5 -> 0.8)'
+    );
     expect(processExitSpy).toHaveBeenCalledWith(1);
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should compare with the configured thresholds and log what was not compared', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuMaxIncreasePercent = 25;
+    mockConf.hikakuMaxErrorRateIncreasePercent = 5;
+    mockConf.hikakuMaxResourceIncreasePercent = 30;
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+    (hikakuMock.compare as jest.Mock<any>).mockReturnValue({
+      timestamp: 'test',
+      overallVerdict: 'fail',
+      scenarios: [],
+      resources: [{ browser: 'chrome', deltas: [], verdict: 'fail' }],
+      summary: {
+        totalScenarios: 1,
+        passed: 1,
+        failed: 0,
+        regressions: [
+          {
+            metricName: 'mean_browser_ram_kb',
+            baselineValue: 800000,
+            currentValue: 1200000,
+            deltaPercent: 50,
+            status: 'regression',
+            browser: 'chrome',
+          },
+          {
+            metricName: 'error_rate',
+            baselineValue: 0,
+            currentValue: 0.1,
+            deltaPercent: Infinity,
+            status: 'regression',
+            scenario: 'Login',
+            iteration: 0,
+          },
+        ],
+        missingScenarios: [{ scenario: 'Checkout', iteration: 1 }],
+        newScenarios: [{ scenario: 'Search', iteration: 0 }],
+        missingBrowsers: ['firefox'],
+      },
+    });
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.compare).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      defaultMaxIncreasePercent: 25,
+      defaultMaxErrorRateIncreasePercent: 5,
+      defaultMaxResourceIncreasePercent: 30,
+    });
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'Hikaku: fail (1 scenario iterations passed, 0 failed; 1 browsers compared)'
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Hikaku regression: chrome: mean_browser_ram_kb +50.0% (800000 -> 1200000)'
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Hikaku regression: scenario "Login" iteration 0: error_rate from 0 (0 -> 0.1)'
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('scenario "Checkout" iteration 1 is in the baseline but did not run')
+    );
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('scenario "Search" iteration 0 is not in the baseline')
+    );
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('firefox was not measured in this run')
+    );
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should write the LLM report with the configured model', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = false;
+    mockConf.hikakuReportMode = 'always';
+    mockConf.hikakuLlmApiKey = 'sk-test';
+    mockConf.hikakuLlmModel = 'claude-opus-5-5';
+    (hikakuMock.baselineExists as jest.Mock<any>).mockReturnValue(true);
+
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+
+    expect(hikakuMock.createAnthropicProvider).toHaveBeenCalledWith('sk-test', 'claude-opus-5-5');
 
     processExitSpy.mockRestore();
   });
@@ -505,7 +627,11 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'fail',
       scenarios: [],
+      resources: [],
       summary: {
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
         totalScenarios: 1,
         passed: 0,
         failed: 1,
@@ -516,6 +642,8 @@ describe('main module', () => {
             currentValue: 0.8,
             deltaPercent: 60,
             status: 'regression',
+            scenario: 'Login',
+            iteration: 2,
           },
         ],
       },
@@ -525,7 +653,7 @@ describe('main module', () => {
 
     await import('../main.js');
 
-    expect(hikakuMock.createAnthropicProvider).toHaveBeenCalledWith('sk-test');
+    expect(hikakuMock.createAnthropicProvider).toHaveBeenCalledWith('sk-test', undefined);
     expect(hikakuMock.generateReport).toHaveBeenCalled();
     expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('LLM Report'));
 
@@ -542,7 +670,11 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'fail',
       scenarios: [],
+      resources: [],
       summary: {
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
         totalScenarios: 1,
         passed: 0,
         failed: 1,
@@ -553,6 +685,8 @@ describe('main module', () => {
             currentValue: 0.8,
             deltaPercent: 60,
             status: 'regression',
+            scenario: 'Login',
+            iteration: 2,
           },
         ],
       },
@@ -577,7 +711,11 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'fail',
       scenarios: [],
+      resources: [],
       summary: {
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
         totalScenarios: 1,
         passed: 0,
         failed: 1,
@@ -588,6 +726,8 @@ describe('main module', () => {
             currentValue: 0.8,
             deltaPercent: 60,
             status: 'regression',
+            scenario: 'Login',
+            iteration: 2,
           },
         ],
       },
@@ -614,7 +754,16 @@ describe('main module', () => {
       timestamp: 'test',
       overallVerdict: 'pass',
       scenarios: [],
-      summary: { totalScenarios: 1, passed: 1, failed: 0, regressions: [] },
+      resources: [],
+      summary: {
+        totalScenarios: 1,
+        passed: 1,
+        failed: 0,
+        regressions: [],
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
+      },
     });
 
     const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);

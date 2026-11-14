@@ -39,12 +39,12 @@ Source code is in `src/` with a simple module structure:
 
 - **main.ts** - Entry point: initializes config, logger, metrics, then either:
   - server mode (default): starts the scenarios and, without waiting for them (they may never end, e.g. `waitForever`), the Express HTTP server exposing the metrics
-  - hikaku mode (`KYARA_HIKAKU_BASELINE_PATH`): runs the scenarios to completion, saves or compares the baseline, exits
+  - hikaku mode (`KYARA_HIKAKU_BASELINE_PATH`): runs the scenarios to completion, saves or compares the baseline (scenario latency and errors, browser CPU/RAM), logs each regression with its scenario iteration or browser and the baseline iterations that did not run, exits with code 1 on `fail`
 - **browser.ts** - Core simulation logic: runs the YAML scenarios with yaml-pptr, which launches the browsers they use; its `onBrowser` callback (yaml-pptr 3.2) registers each browser for CPU/RAM monitoring and shutdown; `onPage` captures browser events (requests, responses, errors); `closeBrowsers()` is called by main on SIGTERM/SIGINT (the HTTP server would keep the process alive otherwise)
 - **resources.ts** - CPU/RAM sampling of the browsers' process trees from `/proc` (Linux only): per renderer process (`dsd_tab_*`) and per browser (`dsd_pod_*`)
 - **conf.ts** - Configuration via environment variables (KYARA_* prefix), validated: `createConf` throws a `ConfError` listing every invalid value
 - **logger.ts** - Winston logger with ECS format for Elastic Stack compatibility
-- **metrics.ts** - Prometheus metrics: counters for events, histograms for resource consumption
+- **metrics.ts** - Prometheus metrics (`@prometheus-io/client`, formerly `prom-client`): counters for events, histograms for resource consumption. hikaku reads them by name and label: keep them in sync with hikaku's `src/snapshot.ts`
 - **__tests__/** - Jest unit tests
 
 Scenario failures (yaml-pptr 3): `readYamlAndInterpret` rejects with a `ConfigurationError` before anything runs (main.ts exits with code 1, like any error where nothing ran), or with an `AggregateError` once every scenario has run when some iterations failed (each failure is already logged by yaml-pptr; server mode keeps exposing the metrics, hikaku mode exits with code 1 without touching the baseline).
@@ -70,6 +70,7 @@ Key environment variables:
 - `KYARA_METRICS_ITERATION_LABEL` - Label scenario metrics with the iteration (default `true`; hikaku requires it)
 - `KYARA_HTTP_METRICS_ROUTE` - Prometheus endpoint (default: `/metrics`)
 - `KYARA_HTTP_LIVENESS_PROBE_ROUTE` - Health check (default: `/live`)
+- `KYARA_HIKAKU_*` - hikaku mode: baseline path, thresholds (latency, error rate, browser resources), LLM report (mode, output, locale, API key, model); see the README
 
 ## Deployment
 
@@ -83,6 +84,8 @@ Key environment variables:
 
 - **Puppeteer v25** - Uses `browser: "firefox"` option (not `product`); also the peer dependency of yaml-pptr 3
 - **@bloom-perf/yaml-pptr v3** - Published on npmjs.com (no authentication required); ships its own TypeScript declarations and a JSON Schema of the YAML (`dist/schema.json`)
+- **@bloom-perf/hikaku 0.3** - Regression detection; reads the registry through `getMetricsAsJSON()`; its LLM report uses the optional `@anthropic-ai/sdk`
+- **@prometheus-io/client 0.16** - The Prometheus client, renamed from `prom-client` (deprecated)
 
 ## Helm Chart
 

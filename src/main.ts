@@ -3,7 +3,7 @@ import express from 'express';
 import { createMetricsEmitter, createPromRegister } from './metrics.js';
 import { closeBrowsers, launchBrowsers } from './browser.js';
 import { createLogger } from './logger.js';
-import { collectDefaultMetrics } from 'prom-client';
+import { collectDefaultMetrics } from '@prometheus-io/client';
 import * as hikaku from '@bloom-perf/hikaku';
 import { writeFileSync } from 'fs';
 
@@ -66,6 +66,34 @@ import { writeFileSync } from 'fs';
     }
   };
 
+  /** Logs the verdict, then what makes it fail and what was not compared */
+  const logHikakuReport = (report: hikaku.ComparisonReport) => {
+    const { summary } = report;
+    logger.info(
+      `Hikaku: ${report.overallVerdict} (${summary.passed} scenario iterations passed, ${summary.failed} failed; ${report.resources.length} browsers compared)`
+    );
+    for (const r of summary.regressions) {
+      const where = r.browser ?? `scenario "${r.scenario}" iteration ${r.iteration}`;
+      const delta = Number.isFinite(r.deltaPercent) ? `+${r.deltaPercent.toFixed(1)}%` : 'from 0';
+      logger.warn(
+        `Hikaku regression: ${where}: ${r.metricName} ${delta} (${r.baselineValue} -> ${r.currentValue})`
+      );
+    }
+    for (const m of summary.missingScenarios) {
+      logger.warn(
+        `Hikaku: scenario "${m.scenario}" iteration ${m.iteration} is in the baseline but did not run: update the baseline if the scenarios changed`
+      );
+    }
+    for (const n of summary.newScenarios) {
+      logger.info(
+        `Hikaku: scenario "${n.scenario}" iteration ${n.iteration} is not in the baseline: not compared`
+      );
+    }
+    for (const browser of summary.missingBrowsers) {
+      logger.info(`Hikaku: ${browser} was not measured in this run: its CPU/RAM is not compared`);
+    }
+  };
+
   // Hikaku (batch mode): run the scenarios to completion, then save or compare the baseline
   if (conf.hikakuBaselinePath) {
     if (!(await runScenarios())) {
@@ -83,10 +111,10 @@ import { writeFileSync } from 'fs';
       const baseline = hikaku.loadBaseline(conf.hikakuBaselinePath);
       const report = hikaku.compare(snapshot, baseline, {
         defaultMaxIncreasePercent: conf.hikakuMaxIncreasePercent,
+        defaultMaxErrorRateIncreasePercent: conf.hikakuMaxErrorRateIncreasePercent,
+        defaultMaxResourceIncreasePercent: conf.hikakuMaxResourceIncreasePercent,
       });
-      logger.info(
-        `Hikaku: ${report.overallVerdict} (${report.summary.passed} passed, ${report.summary.failed} failed)`
-      );
+      logHikakuReport(report);
 
       // LLM report generation
       const shouldReport =
@@ -95,7 +123,10 @@ import { writeFileSync } from 'fs';
 
       if (shouldReport && conf.hikakuLlmApiKey) {
         try {
-          const provider = hikaku.createAnthropicProvider(conf.hikakuLlmApiKey);
+          const provider = hikaku.createAnthropicProvider(
+            conf.hikakuLlmApiKey,
+            conf.hikakuLlmModel
+          );
           const llmReport = await hikaku.generateReport(report, snapshot, baseline, {
             provider,
             locale: conf.hikakuReportLocale,
@@ -114,9 +145,6 @@ import { writeFileSync } from 'fs';
       }
 
       if (report.overallVerdict === 'fail') {
-        for (const r of report.summary.regressions) {
-          logger.warn(`Hikaku regression: ${r.metricName} +${r.deltaPercent.toFixed(1)}%`);
-        }
         process.exit(1);
       }
     } else {

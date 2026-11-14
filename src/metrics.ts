@@ -1,4 +1,4 @@
-import prom from 'prom-client';
+import prom from '@prometheus-io/client';
 
 export const enum Status {
   Success = 'success',
