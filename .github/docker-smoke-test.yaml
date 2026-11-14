@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://unpkg.com/@bloom-perf/yaml-pptr@3/dist/schema.json
+# Smoke test of the Docker image (CI): one scenario per browser shipped in the image, on an
+# inline page (no network needed)
+scenarios:
+  - name: firefox
+    browser: firefox
+    location: "data:text/html,<title>Kyara</title><h1>Kyara</h1><button onclick=\"this.textContent='done'\">go</button>"
+    steps:
+      - click: button
+      - type: WAIT_FOR_SELECTOR
+        selector: "xpath///button[text()='done']"
+  - name: chrome
+    browser: chrome
+    location: "data:text/html,<title>Kyara</title><h1>Kyara</h1><button onclick=\"this.textContent='done'\">go</button>"
+    steps:
+      - click: button
+      - type: WAIT_FOR_SELECTOR
+        selector: "xpath///button[text()='done']"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kyara is a load/stress testing tool that uses Puppeteer with Firefox headless browser to simulate web interactions and collect performance metrics. It executes scenarios defined in YAML files via the `@bloom-perf/yaml-pptr` library and exposes Prometheus metrics.
+Kyara is a load/stress testing tool that uses Puppeteer with headless browsers (Firefox, Chrome) to simulate web interactions and collect performance metrics. It executes scenarios defined in YAML files via the `@bloom-perf/yaml-pptr` library and exposes Prometheus metrics.
 
 ## Build and Development Commands
 
@@ -14,7 +14,7 @@ Requires **Node.js v22.12+**.
 npm run build          # TypeScript compilation (outputs to dist/)
 npm run start:dev      # Run in development mode with tsx
 npm run start:prod     # Run compiled JavaScript from dist/
-npm run installFirefox # Install Firefox for Puppeteer
+npm run installBrowsers # Install Firefox and Chrome for Puppeteer
 npm test               # Run Jest tests
 npm run test:coverage  # Run tests with coverage report
 npm run lint           # Run ESLint
@@ -40,8 +40,9 @@ Source code is in `src/` with a simple module structure:
 - **main.ts** - Entry point: initializes config, logger, metrics, then either:
   - server mode (default): starts the scenarios and, without waiting for them (they may never end, e.g. `waitForever`), the Express HTTP server exposing the metrics
   - hikaku mode (`KYARA_HIKAKU_BASELINE_PATH`): runs the scenarios to completion, saves or compares the baseline, exits
-- **browser.ts** - Core simulation logic: launches Firefox, executes YAML scenarios, monitors CPU/RAM via shell commands, captures browser events (requests, responses, errors)
-- **conf.ts** - Configuration via environment variables (KYARA_* prefix)
+- **browser.ts** - Core simulation logic: runs the YAML scenarios with yaml-pptr, which launches the browsers they use; its `onBrowser` callback (yaml-pptr 3.2) registers each browser for CPU/RAM monitoring and shutdown; `onPage` captures browser events (requests, responses, errors); `closeBrowsers()` is called by main on SIGTERM/SIGINT (the HTTP server would keep the process alive otherwise)
+- **resources.ts** - CPU/RAM sampling of the browsers' process trees from `/proc` (Linux only): per renderer process (`dsd_tab_*`) and per browser (`dsd_pod_*`)
+- **conf.ts** - Configuration via environment variables (KYARA_* prefix), validated: `createConf` throws a `ConfError` listing every invalid value
 - **logger.ts** - Winston logger with ECS format for Elastic Stack compatibility
 - **metrics.ts** - Prometheus metrics: counters for events, histograms for resource consumption
 - **__tests__/** - Jest unit tests
@@ -65,20 +66,20 @@ Key environment variables:
 - `KYARA_APP_NAME` - Application name (default: `kyara-puppet`)
 - `KYARA_YAML_FILE_PATH` - Path to scenario YAML file (default: `/var/config/kyara.yaml`)
 - `KYARA_HTTP_PORT` - HTTP server port (default: 0 = random)
-- `KYARA_HEADLESS` - Run browser headless
+- `KYARA_HEADLESS` - Run browser headless (booleans: `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off`)
+- `KYARA_METRICS_ITERATION_LABEL` - Label scenario metrics with the iteration (default `true`; hikaku requires it)
 - `KYARA_HTTP_METRICS_ROUTE` - Prometheus endpoint (default: `/metrics`)
 - `KYARA_HTTP_LIVENESS_PROBE_ROUTE` - Health check (default: `/live`)
 
 ## Deployment
 
-- Docker multi-stage build defined in `Dockerfile` (Firefox is installed explicitly with `npx puppeteer browsers install firefox`: Puppeteer does not download it by default)
+- Docker multi-stage build defined in `Dockerfile`, on `node:26-slim` (linux/amd64 only): ships Firefox and Chrome, installed explicitly with `npx puppeteer browsers install` (the Puppeteer postinstall download is skipped), the browsers' shared libraries only (`libgbm.so.1` without Mesa), fonts, `tini` as init; runs as uid 1000. CI builds it and runs `.github/docker-smoke-test.yaml` (one scenario per browser) in it
 - Helm chart in `helm/` for Kubernetes deployment
 - Scenarios are mounted via ConfigMap from `helm/config/kyara.yml`
-- Every scenario must declare `browser: firefox` to run in Kyara's Firefox (yaml-pptr defaults to Chrome, which Kyara neither monitors nor ships)
+- Each scenario runs in the browser its `browser:` key names (`chrome` by default): yaml-pptr launches only the browsers used; Kyara monitors all of them
 - GitHub Actions CI runs build and tests on push; releases publish to ghcr.io
 
 ## Dependencies
 
 - **Puppeteer v25** - Uses `browser: "firefox"` option (not `product`); also the peer dependency of yaml-pptr 3
-- **Chalk v5** - Pure ESM, requires ES modules
 - **@bloom-perf/yaml-pptr v3** - Published on npmjs.com (no authentication required); ships its own TypeScript declarations and a JSON Schema of the YAML (`dist/schema.json`)

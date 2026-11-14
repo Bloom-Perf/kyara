@@ -1,29 +1,54 @@
-import { createConf, logConf } from './conf.js';
+import { Conf, createConf, logConf } from './conf.js';
 import express from 'express';
 import { createMetricsEmitter, createPromRegister } from './metrics.js';
-import { launchBrowsers } from './browser.js';
+import { closeBrowsers, launchBrowsers } from './browser.js';
 import { createLogger } from './logger.js';
 import { collectDefaultMetrics } from 'prom-client';
 import * as hikaku from '@bloom-perf/hikaku';
 import { writeFileSync } from 'fs';
 
 (async () => {
-  const conf = createConf({});
   const logger = createLogger();
+  let conf: Conf;
+  try {
+    conf = createConf({});
+  } catch (err: unknown) {
+    logger.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+    return;
+  }
 
   logConf(conf, logger);
 
+  /**
+   * Stops on SIGTERM (docker stop, Kubernetes) and SIGINT (Ctrl+C): otherwise the HTTP
+   * server keeps the process alive once Puppeteer has closed the browsers.
+   */
+  const stop = async (signal: NodeJS.Signals) => {
+    logger.info(`${signal} received: closing the browsers and stopping`);
+    await closeBrowsers(logger);
+    // An interrupted batch run (hikaku) fails; a server is stopped normally
+    if (conf.hikakuBaselinePath) {
+      logger.error('Hikaku: interrupted, the baseline is neither saved nor compared');
+    }
+    process.exit(conf.hikakuBaselinePath ? 1 : 0);
+  };
+  process.once('SIGTERM', (signal) => void stop(signal));
+  process.once('SIGINT', (signal) => void stop(signal));
+
   const promRegistry = createPromRegister();
   promRegistry.setDefaultLabels({ app: conf.appName });
-  const metricsEmitter = createMetricsEmitter(promRegistry);
+  const metricsEmitter = createMetricsEmitter(promRegistry, {
+    iterationLabel: conf.metricsIterationLabel,
+  });
   collectDefaultMetrics({ register: promRegistry });
 
   /**
    * Runs the scenarios and resolves to whether they all succeeded.
    *
    * yaml-pptr rejects with an AggregateError once every scenario has run if some iterations
-   * failed (each failure has already been logged): the metrics of the run are still there.
-   * Any other error (invalid configuration, missing scenario file, Firefox not starting)
+   * failed or a browser could not start (each failure has already been logged): the metrics
+   * of the run are still there. Any other error (invalid scenarios, missing scenario file)
    * means nothing ran: exit.
    */
   const runScenarios = async (): Promise<boolean> => {
