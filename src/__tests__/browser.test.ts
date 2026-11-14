@@ -21,8 +21,13 @@ jest.unstable_mockModule('fs', () => ({
   readFileSync: jest.fn<() => string>(),
 }));
 
-jest.unstable_mockModule('child_process', () => ({
-  execSync: jest.fn<() => Buffer>(),
+const mockResourceMonitor = {
+  watch: jest.fn(),
+  sample: jest.fn(),
+  stop: jest.fn(),
+};
+jest.unstable_mockModule('../resources.js', () => ({
+  createResourceMonitor: jest.fn(() => mockResourceMonitor),
 }));
 
 jest.unstable_mockModule('@bloom-perf/yaml-pptr', () => ({
@@ -32,11 +37,11 @@ jest.unstable_mockModule('@bloom-perf/yaml-pptr', () => ({
 // Import mocked modules
 const puppeteerMock = await import('puppeteer');
 const fsMock = await import('fs');
-const childProcessMock = await import('child_process');
+const resourcesMock = await import('../resources.js');
 const ypMock = await import('@bloom-perf/yaml-pptr');
 
 // Import module under test after mocks are set up
-const { launchBrowsers } = await import('../browser.js');
+const { launchBrowsers, closeBrowsers } = await import('../browser.js');
 
 // Helper: setup readYamlAndInterpret mock that calls onPage with given context
 const setupYpMock = (page: any, ctx = defaultCtx) => {
@@ -60,22 +65,10 @@ describe('launchBrowsers', () => {
   let mockMetricsEmitter: MetricsEmitter;
   let mockBrowser: Partial<Browser>;
   let mockPage: Partial<Page>;
-  let processExitHandlers: Array<() => void>;
-  let originalProcessOn: typeof process.on;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-
-    // Capture process.on('exit') handlers
-    processExitHandlers = [];
-    originalProcessOn = process.on.bind(process);
-    (process as any).on = jest.fn((event: string, handler: () => void) => {
-      if (event === 'exit') {
-        processExitHandlers.push(handler);
-      }
-      return process;
-    });
 
     // Setup mock config
     mockConf = {
@@ -85,6 +78,7 @@ describe('launchBrowsers', () => {
       httpMetricsRoute: '/metrics',
       livenessProbeRoute: '/live',
       headless: true,
+      metricsIterationLabel: true,
       hikakuBaselinePath: undefined,
       hikakuUpdateBaseline: false,
       hikakuMaxIncreasePercent: 20,
@@ -107,7 +101,6 @@ describe('launchBrowsers', () => {
     mockMetricsEmitter = {
       browserStarted: jest.fn(),
       browserTabStarted: jest.fn(),
-      tabDelayBeforeLaunch: jest.fn(),
       browserLogLine: jest.fn(),
       browserRequest: jest.fn(),
       browserRequestFinished: jest.fn(),
@@ -132,6 +125,8 @@ describe('launchBrowsers', () => {
     // Setup mock browser
     mockBrowser = {
       close: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      once: jest.fn<any>(),
+      process: jest.fn<any>(() => ({ pid: 1234 })),
     };
 
     // Setup puppeteer.launch mock
@@ -139,13 +134,9 @@ describe('launchBrowsers', () => {
 
     // Setup fs.readFileSync mock
     (fsMock.readFileSync as unknown as jest.Mock).mockReturnValue('scenarios: []');
-
-    // Setup execSync mock - return empty string by default
-    (childProcessMock.execSync as unknown as jest.Mock).mockReturnValue(Buffer.from(''));
   });
 
   afterEach(() => {
-    process.on = originalProcessOn;
     jest.useRealTimers();
   });
 
@@ -175,6 +166,18 @@ describe('launchBrowsers', () => {
     );
   });
 
+  it('should emit browserStarted metric with an error status when Firefox cannot start', async () => {
+    (puppeteerMock.default.launch as jest.Mock<AsyncFn>).mockRejectedValue(
+      new Error('Could not find Firefox')
+    );
+
+    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toThrow(
+      'Could not find Firefox'
+    );
+    expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledWith('firefox', Status.Error);
+    expect(ypMock.readYamlAndInterpret).not.toHaveBeenCalled();
+  });
+
   it('should emit browserStarted metric on successful launch', async () => {
     setupYpMockNoCallback();
 
@@ -188,15 +191,56 @@ describe('launchBrowsers', () => {
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    expect(mockLogger.info).toHaveBeenCalledWith('Start browser');
+    expect(mockLogger.info).toHaveBeenCalledWith('Launching firefox (headless: true)');
   });
 
-  it('should register process exit handler', async () => {
+  it('should measure the CPU/RAM of Firefox while the scenarios run', async () => {
     setupYpMockNoCallback();
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    expect(process.on).toHaveBeenCalledWith('exit', expect.any(Function));
+    expect(resourcesMock.createResourceMonitor).toHaveBeenCalledWith(
+      mockMetricsEmitter,
+      mockLogger
+    );
+    expect(mockResourceMonitor.watch).toHaveBeenCalledWith('firefox', 1234);
+    expect(mockResourceMonitor.stop).toHaveBeenCalled();
+  });
+
+  it('should close Firefox once the scenarios are over, also when some failed', async () => {
+    (ypMock.readYamlAndInterpret as jest.Mock<AsyncFn>).mockRejectedValue(
+      new AggregateError([new Error('iteration failed')], '1 error(s)')
+    );
+
+    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toThrow(
+      '1 error(s)'
+    );
+    expect(mockResourceMonitor.stop).toHaveBeenCalled();
+    expect(mockBrowser.close).toHaveBeenCalled();
+  });
+
+  it('should close the browsers still running on demand (shutdown)', async () => {
+    // Scenarios that never end (waitForever)
+    (ypMock.readYamlAndInterpret as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    void launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(mockBrowser.close).not.toHaveBeenCalled();
+
+    await closeBrowsers(mockLogger);
+
+    expect(mockBrowser.close).toHaveBeenCalled();
+  });
+
+  it('should not wait more than the timeout for the browsers to close', async () => {
+    (ypMock.readYamlAndInterpret as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    (mockBrowser.close as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    void launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
+    await jest.advanceTimersByTimeAsync(0);
+
+    const closing = closeBrowsers(mockLogger, 1000);
+    await jest.advanceTimersByTimeAsync(1000);
+
+    await expect(closing).resolves.toBeUndefined();
   });
 
   it('should call readYamlAndInterpret with options object containing browsers and onPage', async () => {
@@ -346,7 +390,7 @@ describe('launchBrowsers', () => {
     expect(mockLogger.error).toHaveBeenCalled();
   });
 
-  it('should emit browserRequestDuration when requestfinished fires', async () => {
+  it('should time each request separately, even with the same URL', async () => {
     const pageEventHandlers: Record<string, Function> = {};
     mockPage.on = jest.fn<any>((event: string, handler: Function) => {
       pageEventHandlers[event] = handler;
@@ -357,72 +401,44 @@ describe('launchBrowsers', () => {
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    // Simulate request then requestfinished
-    const mockRequest = { url: () => 'https://example.com/api/data' } as HTTPRequest;
-    pageEventHandlers['request'](mockRequest);
+    // Two concurrent requests for the same URL
+    const first = { url: () => 'https://example.com/api/data' } as HTTPRequest;
+    const second = { url: () => 'https://example.com/api/data' } as HTTPRequest;
+    pageEventHandlers['request'](first);
+    jest.advanceTimersByTime(100);
+    pageEventHandlers['request'](second);
+    jest.advanceTimersByTime(50);
+    pageEventHandlers['requestfinished'](first);
+    jest.advanceTimersByTime(250);
+    pageEventHandlers['requestfinished'](second);
 
-    // Advance time slightly to simulate latency
-    jest.advanceTimersByTime(150);
-
-    pageEventHandlers['requestfinished'](mockRequest);
-
-    expect(mockMetricsEmitter.browserRequestDuration).toHaveBeenCalledWith(
-      'example.com',
-      'Latency Test',
-      0,
-      expect.any(Number)
-    );
+    const durations = (mockMetricsEmitter.browserRequestDuration as jest.Mock).mock.calls;
+    expect(durations).toHaveLength(2);
+    expect(durations[0]).toEqual(['example.com', 'Latency Test', 0, expect.any(Number)]);
+    expect(durations[0][3]).toBeCloseTo(0.15, 2);
+    expect(durations[1][3]).toBeCloseTo(0.3, 2);
   });
 
-  it('should collect CPU/RAM metrics from execSync output', async () => {
-    setupYpMockNoCallback();
-
-    // Mock execSync to return CPU-RAM pairs (no trailing newline to avoid NaN)
-    (childProcessMock.execSync as unknown as jest.Mock).mockReturnValue(
-      Buffer.from('10-2048\n20-4096')
-    );
-
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
-
-    // Advance timer to trigger fetchTabsRamCpuConsumption
-    jest.advanceTimersByTime(0);
-
-    expect(mockMetricsEmitter.resourcesConsumptionPerTab).toHaveBeenCalledWith('firefox', 2048, 10);
-    expect(mockMetricsEmitter.resourcesConsumptionPerTab).toHaveBeenCalledWith('firefox', 4096, 20);
-    expect(mockMetricsEmitter.resourcesConsumptionPerPod).toHaveBeenCalledWith('firefox', 6144, 30);
-  });
-
-  it('should handle execSync errors gracefully', async () => {
-    setupYpMockNoCallback();
-
-    // Mock execSync to throw an error
-    (childProcessMock.execSync as unknown as jest.Mock).mockImplementation(() => {
-      throw new Error('Command failed');
+  it('should not time a failed request', async () => {
+    const pageEventHandlers: Record<string, Function> = {};
+    mockPage.on = jest.fn<any>((event: string, handler: Function) => {
+      pageEventHandlers[event] = handler;
+      return mockPage as Page;
     });
 
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
-
-    // Advance timer to trigger fetchTabsRamCpuConsumption
-    jest.advanceTimersByTime(0);
-
-    expect(mockLogger.error).toHaveBeenCalled();
-  });
-
-  it('should schedule resource monitoring every 5 seconds', async () => {
-    setupYpMockNoCallback();
-    (childProcessMock.execSync as unknown as jest.Mock).mockReturnValue(Buffer.from(''));
+    setupYpMock(mockPage, { scenarioName: 'Latency Test', workerIndex: 0, iteration: 0 });
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
-    // First call happens immediately
-    expect(childProcessMock.execSync).toHaveBeenCalledTimes(1);
+    const request = { url: () => 'https://example.com/api/data' } as HTTPRequest;
+    pageEventHandlers['request'](request);
+    pageEventHandlers['requestfailed'](request);
 
-    // Advance timer by 5 seconds
-    jest.advanceTimersByTime(5000);
-    expect(childProcessMock.execSync).toHaveBeenCalledTimes(2);
-
-    // Advance timer by another 5 seconds
-    jest.advanceTimersByTime(5000);
-    expect(childProcessMock.execSync).toHaveBeenCalledTimes(3);
+    expect(mockMetricsEmitter.browserRequestFailed).toHaveBeenCalledWith(
+      'example.com',
+      'Latency Test',
+      0
+    );
+    expect(mockMetricsEmitter.browserRequestDuration).not.toHaveBeenCalled();
   });
 });
