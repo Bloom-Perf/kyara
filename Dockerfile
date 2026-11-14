@@ -8,7 +8,12 @@ COPY tsconfig.json ./
 
 COPY ./src src
 
+# Kyara only runs Firefox: skip the Chrome download of Puppeteer's postinstall script
+# (which recent npm versions may not run anyway) and install Firefox explicitly,
+# into /root/.cache/puppeteer (copied to the runner below)
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN npm ci
+RUN npx puppeteer browsers install firefox
 RUN npm run build
 
 # Production deployment
