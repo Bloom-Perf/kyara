@@ -43,6 +43,16 @@
         "dev-dependencies"
       ],
       "commitMessagePrefix": "🔧"
+    },
+    {
+      "description": "TypeScript 7 has no JavaScript API yet: typescript-eslint (<6.1) and ts-jest (<7) cannot run with it. Approve the update from the Dependency Dashboard once they support it.",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
     }
   ],
   "schedule": [
