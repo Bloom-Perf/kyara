@@ -74,7 +74,7 @@ npm run start:dev
 
 ### Prerequisites
 
-- **Node.js** v22 or higher
+- **Node.js** v22.12 or higher
 - **Firefox for Puppeteer** — Kyara uses headless Firefox to run scenarios. Install it with `npm run installFirefox`
 - **Docker** (for containerized deployments)
 - **Kubernetes** (for Helm deployments)
@@ -175,17 +175,32 @@ helm install kyara-release ./kyara-0.0.1.tgz \
 Create a YAML file (e.g., `kyara.yml`) to define your interaction scenario:
 
 ```yaml
+# yaml-language-server: $schema=https://unpkg.com/@bloom-perf/yaml-pptr@3/dist/schema.json
 scenarios:
   - location: http://example.com
+    browser: firefox
     steps:
       - waitForever
 ```
 
-This example instructs Kyara to launch a browser, navigate to the URL, and wait indefinitely. You can define multiple scenarios with various actions (click, navigate, wait) to simulate complex user behaviors.
+This example instructs Kyara to navigate to the URL in its Firefox and wait indefinitely. You can define multiple scenarios with various actions (click, navigate, wait) to simulate complex user behaviors; they all start at the same time.
 
-See [yaml-pptr documentation](https://github.com/Bloom-Perf/yaml-pptr) for the full scenario syntax.
+- **`browser: firefox` is required** on every scenario: it runs the scenario in the Firefox launched and monitored by Kyara (CPU/RAM metrics). Without it, yaml-pptr launches a separate Chrome that Kyara does not monitor (and that the Docker image does not contain).
+- The **first line** enables completion and validation in editors using the [YAML extension for VS Code](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (or any `yaml-language-server` client).
+- The configuration is **strict**: an unknown key (e.g. `iteration:` instead of `iterations:`) is an error.
+
+See [yaml-pptr documentation](https://github.com/Bloom-Perf/yaml-pptr) for the full scenario syntax, including `${VAR}` environment variables (e.g. to keep credentials out of the YAML).
+
+### Scenario Failures
+
+| What happens | Server mode (default) | Hikaku mode (`KYARA_HIKAKU_BASELINE_PATH` set) |
+|--------------|-----------------------|-----------------------------------------------|
+| Invalid configuration (YAML syntax, unknown key, missing environment variable), scenario file not found, Firefox not starting | Error logged, exit code `1` (nothing runs) | Same |
+| Some iterations fail (e.g. a selector not found) | Each failure is logged with its scenario, worker and iteration; the other iterations go on and the metrics stay exposed | Failures logged, then exit code `1`: the baseline is neither saved nor compared |
 
 ### Accessing Endpoints
+
+The endpoints are available as soon as Kyara starts, while the scenarios run (in server mode):
 
 ```bash
 # Prometheus metrics

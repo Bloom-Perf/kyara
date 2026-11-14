@@ -18,15 +18,37 @@ import { writeFileSync } from 'fs';
   const metricsEmitter = createMetricsEmitter(promRegistry);
   collectDefaultMetrics({ register: promRegistry });
 
-  // Launching browsers and tabs altogether
-  try {
-    await launchBrowsers(conf, logger, metricsEmitter);
-  } catch (err: unknown) {
-    console.error('Fatal error when launching browsers: ' + err);
-  }
+  /**
+   * Runs the scenarios and resolves to whether they all succeeded.
+   *
+   * yaml-pptr rejects with an AggregateError once every scenario has run if some iterations
+   * failed (each failure has already been logged): the metrics of the run are still there.
+   * Any other error (invalid configuration, missing scenario file, Firefox not starting)
+   * means nothing ran: exit.
+   */
+  const runScenarios = async (): Promise<boolean> => {
+    try {
+      await launchBrowsers(conf, logger, metricsEmitter);
+      logger.info('All scenarios finished');
+      return true;
+    } catch (err: unknown) {
+      if (err instanceof AggregateError) {
+        logger.error(`Scenarios finished with failures: ${err.message}`);
+        return false;
+      }
+      logger.error(`Scenarios could not run: ${String(err)}`);
+      process.exit(1);
+    }
+  };
 
-  // Hikaku: snapshot + compare/save baseline
+  // Hikaku (batch mode): run the scenarios to completion, then save or compare the baseline
   if (conf.hikakuBaselinePath) {
+    if (!(await runScenarios())) {
+      logger.error('Hikaku: scenarios failed, the baseline is neither saved nor compared');
+      process.exit(1);
+      return;
+    }
+
     const snapshot = await hikaku.createSnapshot(promRegistry);
 
     if (conf.hikakuUpdateBaseline) {
@@ -79,9 +101,12 @@ import { writeFileSync } from 'fs';
     }
 
     process.exit(0);
+    return;
   }
 
-  // Start http server to expose prometheus metrics
+  // Server mode: expose the metrics while the scenarios run (they may never end, e.g. `waitForever`)
+  void runScenarios();
+
   await express()
     .get(conf.httpMetricsRoute, async (_req, res, _oth) => {
       res.set('Content-Type', promRegistry.contentType);

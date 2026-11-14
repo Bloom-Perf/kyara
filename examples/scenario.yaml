@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://unpkg.com/@bloom-perf/yaml-pptr@3/dist/schema.json
 ##
 ## Example Kyara scenario — browse Wikipedia pages
 ##
@@ -8,6 +9,8 @@
 
 scenarios:
   - name: wikipedia-browse
+    # Run in the Firefox launched and monitored by Kyara
+    browser: firefox
     location: https://en.wikipedia.org/wiki/Software_performance_testing
     workers: 1
     iterations: 1

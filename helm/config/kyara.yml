@@ -1,4 +1,6 @@
+# yaml-language-server: $schema=https://unpkg.com/@bloom-perf/yaml-pptr@3/dist/schema.json
 scenarios:
   - location: http://google.com
+    browser: firefox
     steps:
       - waitForever

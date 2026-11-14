@@ -1,4 +1,7 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+
+// Lets the asynchronous main function run until it waits on something that never settles
+const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('main module', () => {
   // Mock objects
@@ -40,8 +43,6 @@ describe('main module', () => {
   let mockAppGet: jest.Mock<any>;
   let mockAppListen: jest.Mock<any>;
   let mockApp: { get: jest.Mock<any>; listen: jest.Mock<any> };
-
-  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
   // Store captured route handlers
   let capturedMetricsHandler: ((req: any, res: any, next?: any) => Promise<void>) | null = null;
@@ -152,12 +153,6 @@ describe('main module', () => {
     mockConf.hikakuReportFilePath = './hikaku-report.md';
     mockConf.hikakuReportLocale = 'en';
     mockConf.hikakuLlmApiKey = undefined;
-
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
   });
 
   it('should initialize configuration', async () => {
@@ -257,62 +252,85 @@ describe('main module', () => {
     expect(mockRes.send).toHaveBeenCalledWith('Health check passed');
   });
 
-  it('should handle browser launch errors', async () => {
-    // Reset modules and setup error mock
-    jest.resetModules();
-
-    const testError = new Error('Browser launch failed');
-
-    jest.unstable_mockModule('../conf.js', () => ({
-      createConf: jest.fn(() => mockConf),
-      logConf: jest.fn(),
-    }));
-
-    jest.unstable_mockModule('../logger.js', () => ({
-      createLogger: jest.fn(() => mockLogger),
-    }));
-
-    jest.unstable_mockModule('../metrics.js', () => ({
-      createPromRegister: jest.fn(() => mockRegistry),
-      createMetricsEmitter: jest.fn(() => mockMetricsEmitter),
-    }));
-
-    jest.unstable_mockModule('../browser.js', () => ({
-      launchBrowsers: jest.fn<any>().mockRejectedValue(testError),
-    }));
-
-    jest.unstable_mockModule('express', () => ({
-      default: jest.fn(() => mockApp),
-    }));
-
-    jest.unstable_mockModule('prom-client', () => ({
-      collectDefaultMetrics: jest.fn(),
-    }));
-
-    jest.unstable_mockModule('@bloom-perf/hikaku', () => ({
-      createSnapshot: jest
-        .fn<any>()
-        .mockResolvedValue({ timestamp: 'test', scenarios: [], resources: [] }),
-      saveBaseline: jest.fn(),
-      loadBaseline: jest.fn(),
-      baselineExists: jest.fn(() => false),
-      compare: jest.fn(),
-      generateReport: jest.fn<any>().mockResolvedValue(''),
-      createAnthropicProvider: jest.fn(() => ({ complete: jest.fn() })),
-    }));
-
-    jest.unstable_mockModule('fs', () => ({
-      writeFileSync: jest.fn(),
-    }));
+  it('should start the HTTP server without waiting for the scenarios to end', async () => {
+    // e.g. a scenario ending with `waitForever`
+    (browserMock.launchBrowsers as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
 
     await import('../main.js');
+    await flushPromises();
 
-    // Wait for the promise rejection to be caught
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(browserMock.launchBrowsers).toHaveBeenCalled();
+    expect(mockAppListen).toHaveBeenCalledWith(0);
+  });
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Fatal error when launching browsers')
+  it('should log and exit with code 1 when the scenarios cannot run', async () => {
+    const configurationError = new Error('Invalid scenario configuration: unknown key');
+    configurationError.name = 'ConfigurationError';
+    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(configurationError);
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+    await flushPromises();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Scenarios could not run: ConfigurationError: Invalid scenario configuration: unknown key'
     );
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should keep exposing the metrics when some iterations failed', async () => {
+    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(
+      new AggregateError(
+        [new Error('iteration failed')],
+        '1 error(s) occurred while running scenarios'
+      )
+    );
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+    await flushPromises();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Scenarios finished with failures: 1 error(s) occurred while running scenarios'
+    );
+    expect(processExitSpy).not.toHaveBeenCalled();
+    expect(mockAppListen).toHaveBeenCalledWith(0);
+
+    processExitSpy.mockRestore();
+  });
+
+  it('should log when all scenarios finished', async () => {
+    await import('../main.js');
+    await flushPromises();
+
+    expect(mockLogger.info).toHaveBeenCalledWith('All scenarios finished');
+  });
+
+  it('should neither save nor compare the baseline when some iterations failed', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = true;
+    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(
+      new AggregateError(
+        [new Error('iteration failed')],
+        '1 error(s) occurred while running scenarios'
+      )
+    );
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+    await flushPromises();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Hikaku: scenarios failed, the baseline is neither saved nor compared'
+    );
+    expect(hikakuMock.createSnapshot).not.toHaveBeenCalled();
+    expect(hikakuMock.saveBaseline).not.toHaveBeenCalled();
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+    expect(mockAppListen).not.toHaveBeenCalled();
+
+    processExitSpy.mockRestore();
   });
 
   it('should not call hikaku when hikakuBaselinePath is not set', async () => {

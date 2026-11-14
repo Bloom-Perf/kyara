@@ -166,6 +166,10 @@ describe('launchBrowsers', () => {
         acceptInsecureCerts: true,
       })
     );
+    // Chrome-only flags (--no-sandbox, --single-process...) are not passed to Firefox
+    expect(puppeteerMock.default.launch).toHaveBeenCalledWith(
+      expect.not.objectContaining({ args: expect.anything() })
+    );
   });
 
   it('should emit browserStarted metric on successful launch', async () => {
