@@ -16,22 +16,12 @@ export const launchBrowsers = async (
   // Run the node orchestrator
   logger.info(`Start browser`);
 
-  // Spawn the browser instance
+  // Spawn the browser instance (Puppeteer runs Firefox in a fresh temporary profile; Chrome
+  // flags such as --no-sandbox do not apply). Scenarios run in it when they declare
+  // `browser: firefox`: otherwise yaml-pptr launches its own Chrome, not monitored here.
   const browser = await puppeteer.launch({
     headless: conf.headless,
     browser: 'firefox',
-    ignoreDefaultArgs: ['--disable-extensions'],
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu',
-      '--ignore-certificate-errors',
-    ],
     acceptInsecureCerts: true,
   });
 
