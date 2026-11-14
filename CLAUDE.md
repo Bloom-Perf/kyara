@@ -14,7 +14,7 @@ Requires **Node.js v22.12+**.
 npm run build          # TypeScript compilation (outputs to dist/)
 npm run start:dev      # Run in development mode with tsx
 npm run start:prod     # Run compiled JavaScript from dist/
-npm run installFirefox # Install Firefox for Puppeteer
+npm run installBrowsers # Install Firefox and Chrome for Puppeteer
 npm test               # Run Jest tests
 npm run test:coverage  # Run tests with coverage report
 npm run lint           # Run ESLint
@@ -71,10 +71,10 @@ Key environment variables:
 
 ## Deployment
 
-- Docker multi-stage build defined in `Dockerfile` (Firefox is installed explicitly with `npx puppeteer browsers install firefox`: Puppeteer does not download it by default)
+- Docker multi-stage build defined in `Dockerfile`, on `node:26-slim` (linux/amd64 only): ships Firefox and Chrome, installed explicitly with `npx puppeteer browsers install` (the Puppeteer postinstall download is skipped), the browsers' shared libraries only (`libgbm.so.1` without Mesa), fonts, `tini` as init; runs as uid 1000. CI builds it and runs `.github/docker-smoke-test.yaml` (one scenario per browser) in it
 - Helm chart in `helm/` for Kubernetes deployment
 - Scenarios are mounted via ConfigMap from `helm/config/kyara.yml`
-- Every scenario must declare `browser: firefox` to run in Kyara's Firefox (yaml-pptr defaults to Chrome, which Kyara neither monitors nor ships)
+- Scenarios with `browser: firefox` run in Kyara's Firefox (CPU/RAM monitored); the others (`browser: chrome`, the yaml-pptr default) run in a Chrome launched by yaml-pptr, not monitored
 - GitHub Actions CI runs build and tests on push; releases publish to ghcr.io
 
 ## Dependencies
