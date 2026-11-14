@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY package.json ./
 COPY package-lock.json ./
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.build.json ./
 
 COPY ./src src
 

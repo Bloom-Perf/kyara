@@ -12,7 +12,7 @@ Requires **Node.js v22.12+**.
 
 ```bash
 npm run build          # TypeScript compilation (outputs to dist/)
-npm run start:dev      # Run in development mode with ts-node
+npm run start:dev      # Run in development mode with tsx
 npm run start:prod     # Run compiled JavaScript from dist/
 npm run installFirefox # Install Firefox for Puppeteer
 npm test               # Run Jest tests

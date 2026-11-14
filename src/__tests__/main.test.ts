@@ -1,5 +1,8 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
+// Asynchronous mocks: jest-mock 30.5 no longer infers resolved values from jest.fn<any>()
+type AsyncFn = (...args: any[]) => Promise<any>;
+
 // Lets the asynchronous main function run until it waits on something that never settles
 const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -32,7 +35,7 @@ describe('main module', () => {
   const mockRegistry = {
     setDefaultLabels: jest.fn(),
     contentType: 'text/plain',
-    metrics: jest.fn<any>().mockResolvedValue('test_metrics'),
+    metrics: jest.fn<AsyncFn>().mockResolvedValue('test_metrics'),
   };
 
   const mockMetricsEmitter = {
@@ -76,7 +79,7 @@ describe('main module', () => {
       }
       return mockApp;
     });
-    mockAppListen = jest.fn<any>().mockResolvedValue(undefined);
+    mockAppListen = jest.fn<AsyncFn>().mockResolvedValue(undefined);
     mockApp = {
       get: mockAppGet,
       listen: mockAppListen,
@@ -98,7 +101,7 @@ describe('main module', () => {
     }));
 
     jest.unstable_mockModule('../browser.js', () => ({
-      launchBrowsers: jest.fn<any>().mockResolvedValue(undefined),
+      launchBrowsers: jest.fn<AsyncFn>().mockResolvedValue(undefined),
     }));
 
     jest.unstable_mockModule('express', () => ({
@@ -111,7 +114,7 @@ describe('main module', () => {
 
     jest.unstable_mockModule('@bloom-perf/hikaku', () => ({
       createSnapshot: jest
-        .fn<any>()
+        .fn<AsyncFn>()
         .mockResolvedValue({ timestamp: 'test', scenarios: [], resources: [] }),
       saveBaseline: jest.fn(),
       loadBaseline: jest.fn(() => ({
@@ -126,7 +129,7 @@ describe('main module', () => {
         scenarios: [],
         summary: { totalScenarios: 0, passed: 0, failed: 0, regressions: [] },
       })),
-      generateReport: jest.fn<any>().mockResolvedValue('## LLM Report\n\nAll good!'),
+      generateReport: jest.fn<AsyncFn>().mockResolvedValue('## LLM Report\n\nAll good!'),
       createAnthropicProvider: jest.fn(() => ({ complete: jest.fn() })),
     }));
 
@@ -266,7 +269,7 @@ describe('main module', () => {
   it('should log and exit with code 1 when the scenarios cannot run', async () => {
     const configurationError = new Error('Invalid scenario configuration: unknown key');
     configurationError.name = 'ConfigurationError';
-    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(configurationError);
+    (browserMock.launchBrowsers as jest.Mock<AsyncFn>).mockRejectedValue(configurationError);
     const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
     await import('../main.js');
@@ -281,7 +284,7 @@ describe('main module', () => {
   });
 
   it('should keep exposing the metrics when some iterations failed', async () => {
-    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(
+    (browserMock.launchBrowsers as jest.Mock<AsyncFn>).mockRejectedValue(
       new AggregateError(
         [new Error('iteration failed')],
         '1 error(s) occurred while running scenarios'
@@ -311,7 +314,7 @@ describe('main module', () => {
   it('should neither save nor compare the baseline when some iterations failed', async () => {
     mockConf.hikakuBaselinePath = '/tmp/baseline.json';
     mockConf.hikakuUpdateBaseline = true;
-    (browserMock.launchBrowsers as jest.Mock<any>).mockRejectedValue(
+    (browserMock.launchBrowsers as jest.Mock<AsyncFn>).mockRejectedValue(
       new AggregateError(
         [new Error('iteration failed')],
         '1 error(s) occurred while running scenarios'
