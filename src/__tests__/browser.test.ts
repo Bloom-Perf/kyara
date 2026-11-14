@@ -1,4 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+
+// Asynchronous mocks: jest-mock 30.5 no longer infers resolved values from jest.fn<any>()
+type AsyncFn = (...args: any[]) => Promise<any>;
 import type { Browser, Page, HTTPRequest, HTTPResponse, ConsoleMessage } from 'puppeteer';
 import type { Logger } from 'winston';
 import type { MetricsEmitter } from '../metrics.js';
@@ -48,7 +51,7 @@ const setupYpMock = (page: any, ctx = defaultCtx) => {
 
 // Helper: setup readYamlAndInterpret mock that does NOT call onPage
 const setupYpMockNoCallback = () => {
-  (ypMock.readYamlAndInterpret as jest.Mock<any>).mockResolvedValue(undefined);
+  (ypMock.readYamlAndInterpret as jest.Mock<AsyncFn>).mockResolvedValue(undefined);
 };
 
 describe('launchBrowsers', () => {
