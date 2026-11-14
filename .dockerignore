@@ -1,0 +1,11 @@
+# Only package.json, package-lock.json, tsconfig*.json, src/ and LICENSE are needed
+node_modules
+dist
+coverage
+.git
+.github
+.claude
+examples
+helm
+*.md
+.env*
