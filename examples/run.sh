@@ -9,7 +9,7 @@
 #
 # Prerequisites:
 #   - Node.js v22+
-#   - Firefox installed for Puppeteer:  npm run installFirefox
+#   - Browsers installed for Puppeteer: npm run installBrowsers
 #   - Project built:                    npm run build
 #
 # Usage:
