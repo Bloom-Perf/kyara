@@ -1,0 +1,41 @@
+name: Helm chart
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    # Lints the chart, then validates the rendered manifests against the Kubernetes schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.2
+      - name: Lint
+        run: helm lint --strict helm
+      - name: Render (default values, then a scenario file and environment variables from values)
+        run: |
+          helm template kyara helm --namespace bloom-perf > manifests.yaml
+          echo '---' >> manifests.yaml
+          helm template kyara helm --namespace bloom-perf \
+            --set-file 'scenarios.custom\.yml=helm/config/kyara.yml' --set scenarioFile=custom.yml \
+            --set 'env[0].name=KYARA_HIKAKU_LLM_API_KEY' \
+            --set 'env[0].valueFrom.secretKeyRef.name=anthropic' \
+            --set 'env[0].valueFrom.secretKeyRef.key=api-key' \
+            --set 'imagePullSecrets[0].name=registry' >> manifests.yaml
+      - name: Validate the manifests
+        run: docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e -strict -summary < manifests.yaml

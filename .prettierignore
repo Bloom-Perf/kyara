@@ -2,3 +2,5 @@ dist
 coverage
 node_modules
 package-lock.json
+# Helm templates are not YAML: Prettier breaks them
+helm/templates

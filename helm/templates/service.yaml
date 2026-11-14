@@ -1,19 +1,21 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: { { include "kyara.fullname" . } }
-  namespace: { { .Values.namespace } }
-  labels: { { - include "kyara.labels" . | nindent 4 } }
+  name: {{ include "kyara.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kyara.labels" . | nindent 4 }}
   annotations:
-    prometheus/scrape: "true"
-    prometheus/scheme: "http"
-    prometheus/path: "/metrics"
-    prometheus/port: { { .Values.containerPort | quote } }
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: http
+    prometheus.io/path: {{ .Values.http.metricsPath | quote }}
+    prometheus.io/port: {{ .Values.http.port | quote }}
 spec:
-  type: { { .Values.service.type } }
+  type: {{ .Values.service.type }}
   ports:
-    - port: { { .Values.service.port } }
-      targetPort: { { .Values.containerPort } }
+    - port: {{ .Values.service.port }}
+      targetPort: http
       protocol: TCP
       name: http
-  selector: { { - include "kyara.selectorLabels" . | nindent 4 } }
+  selector:
+    {{- include "kyara.selectorLabels" . | nindent 4 }}

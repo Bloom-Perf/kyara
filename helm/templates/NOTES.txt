@@ -1,0 +1,8 @@
+Kyara runs the scenarios of {{ printf "/var/config/%s" .Values.scenarioFile }} in {{ .Values.replicaCount }} pod(s).
+
+Metrics, from inside the cluster:
+  http://{{ include "kyara.fullname" . }}.{{ .Release.Namespace }}:{{ .Values.service.port }}{{ .Values.http.metricsPath }}
+
+From your machine:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "kyara.fullname" . }} {{ .Values.service.port }}
+  curl http://localhost:{{ .Values.service.port }}{{ .Values.http.metricsPath }}
