@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 // Asynchronous mocks: jest-mock 30.5 no longer infers resolved values from jest.fn<any>()
 type AsyncFn = (...args: any[]) => Promise<any>;
@@ -15,6 +15,7 @@ describe('main module', () => {
     httpMetricsRoute: '/metrics',
     livenessProbeRoute: '/live',
     headless: true,
+    metricsIterationLabel: true,
     hikakuBaselinePath: undefined as string | undefined,
     hikakuUpdateBaseline: false,
     hikakuMaxIncreasePercent: 20,
@@ -61,7 +62,16 @@ describe('main module', () => {
   let hikakuMock: any;
   let fsMock: any;
 
+  // Signal handlers registered by main (process.once is spied: not registered for real)
+  let signalHandlers: Record<string, (signal: string) => void>;
+
   beforeEach(async () => {
+    signalHandlers = {};
+    jest.spyOn(process, 'once').mockImplementation(((event: string, handler: any) => {
+      signalHandlers[event] = handler;
+      return process;
+    }) as any);
+
     // Reset modules before each test
     jest.resetModules();
     jest.clearAllMocks();
@@ -102,6 +112,7 @@ describe('main module', () => {
 
     jest.unstable_mockModule('../browser.js', () => ({
       launchBrowsers: jest.fn<AsyncFn>().mockResolvedValue(undefined),
+      closeBrowsers: jest.fn<AsyncFn>().mockResolvedValue(undefined),
     }));
 
     jest.unstable_mockModule('express', () => ({
@@ -156,6 +167,11 @@ describe('main module', () => {
     mockConf.hikakuReportFilePath = './hikaku-report.md';
     mockConf.hikakuReportLocale = 'en';
     mockConf.hikakuLlmApiKey = undefined;
+    mockConf.metricsIterationLabel = true;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('should initialize configuration', async () => {
@@ -186,7 +202,64 @@ describe('main module', () => {
   it('should create metrics emitter', async () => {
     await import('../main.js');
 
-    expect(metricsMock.createMetricsEmitter).toHaveBeenCalledWith(mockRegistry);
+    expect(metricsMock.createMetricsEmitter).toHaveBeenCalledWith(mockRegistry, {
+      iterationLabel: true,
+    });
+  });
+
+  it('should log the invalid configuration and exit with code 1', async () => {
+    (confMock.createConf as jest.Mock<any>).mockImplementation(() => {
+      throw new Error('Invalid configuration: KYARA_HEADLESS="maybe" is not a boolean');
+    });
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    await import('../main.js');
+    await flushPromises();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Invalid configuration: KYARA_HEADLESS="maybe" is not a boolean'
+    );
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+    expect(browserMock.launchBrowsers).not.toHaveBeenCalled();
+  });
+
+  it.each(['SIGTERM', 'SIGINT'])(
+    'should close the browsers and exit with code 0 on %s in server mode',
+    async (signal) => {
+      // Scenarios that never end (waitForever)
+      (browserMock.launchBrowsers as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+      const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+      await import('../main.js');
+      await flushPromises();
+      signalHandlers[signal](signal);
+      await flushPromises();
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        `${signal} received: closing the browsers and stopping`
+      );
+      expect(browserMock.closeBrowsers).toHaveBeenCalledWith(mockLogger);
+      expect(processExitSpy).toHaveBeenCalledWith(0);
+    }
+  );
+
+  it('should exit with code 1 on SIGTERM in hikaku mode, without touching the baseline', async () => {
+    mockConf.hikakuBaselinePath = '/tmp/baseline.json';
+    mockConf.hikakuUpdateBaseline = true;
+    (browserMock.launchBrowsers as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    const processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+    void import('../main.js');
+    await flushPromises();
+    signalHandlers['SIGTERM']('SIGTERM');
+    await flushPromises();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Hikaku: interrupted, the baseline is neither saved nor compared'
+    );
+    expect(processExitSpy).toHaveBeenCalledWith(1);
+    expect(processExitSpy).not.toHaveBeenCalledWith(0);
+    expect(hikakuMock.saveBaseline).not.toHaveBeenCalled();
   });
 
   it('should collect default Prometheus metrics', async () => {

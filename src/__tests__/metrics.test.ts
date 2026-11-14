@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
+import { createSnapshot } from '@bloom-perf/hikaku';
 import { createPromRegister, createMetricsEmitter, Status } from '../metrics.js';
 import type { Registry } from 'prom-client';
 
@@ -25,7 +26,6 @@ describe('createMetricsEmitter', () => {
     expect(metricsEmitter).toBeDefined();
     expect(typeof metricsEmitter.browserStarted).toBe('function');
     expect(typeof metricsEmitter.browserTabStarted).toBe('function');
-    expect(typeof metricsEmitter.tabDelayBeforeLaunch).toBe('function');
     expect(typeof metricsEmitter.browserLogLine).toBe('function');
     expect(typeof metricsEmitter.browserRequest).toBe('function');
     expect(typeof metricsEmitter.browserRequestFinished).toBe('function');
@@ -54,13 +54,6 @@ describe('createMetricsEmitter', () => {
     expect(metrics).toContain('status="success"');
     expect(metrics).toContain('scenario="Login Flow"');
     expect(metrics).toContain('iteration="0"');
-  });
-
-  it('should increment tab delay counter', async () => {
-    metricsEmitter.tabDelayBeforeLaunch(5);
-
-    const metrics = await registry.metrics();
-    expect(metrics).toContain('browser_tab_delay_before_launch_counter');
   });
 
   it('should increment browser_log_line counter', async () => {
@@ -132,5 +125,49 @@ describe('createMetricsEmitter', () => {
     const metrics = await registry.metrics();
     expect(metrics).toContain('dsd_pod_cpu_percent');
     expect(metrics).toContain('dsd_pod_ram_kb');
+  });
+
+  it('should spread the CPU and memory samples over buckets fitting their units', async () => {
+    metricsEmitter.resourcesConsumptionPerPod('chrome', 300_000, 37);
+
+    const metrics = await registry.metrics();
+    expect(metrics).toContain('dsd_pod_cpu_percent_bucket{le="25",browser="chrome"} 0');
+    expect(metrics).toContain('dsd_pod_cpu_percent_bucket{le="50",browser="chrome"} 1');
+    expect(metrics).toContain('dsd_pod_cpu_percent_bucket{le="800",browser="chrome"} 1');
+    expect(metrics).toContain('dsd_pod_ram_kb_bucket{le="262144",browser="chrome"} 0');
+    expect(metrics).toContain('dsd_pod_ram_kb_bucket{le="524288",browser="chrome"} 1');
+    expect(metrics).toContain('dsd_pod_ram_kb_bucket{le="8388608",browser="chrome"} 1');
+  });
+
+  it('should give hikaku meaningful CPU and memory percentiles', async () => {
+    for (let i = 0; i < 10; i++) {
+      metricsEmitter.resourcesConsumptionPerPod('firefox', 1_500_000, 120);
+    }
+
+    const [resources] = (await createSnapshot(registry)).resources;
+    expect(resources.browser).toBe('firefox');
+    expect(resources.podCpuPercentiles.p50).toBeGreaterThan(100);
+    expect(resources.podCpuPercentiles.p50).toBeLessThanOrEqual(150);
+    expect(resources.podRamKbPercentiles.p50).toBeGreaterThan(1_048_576);
+    expect(resources.podRamKbPercentiles.p50).toBeLessThanOrEqual(2_097_152);
+  });
+});
+
+describe('createMetricsEmitter without the iteration label', () => {
+  it('should label the scenario metrics with the scenario only', async () => {
+    const registry = createPromRegister();
+    const metricsEmitter = createMetricsEmitter(registry, { iterationLabel: false });
+
+    metricsEmitter.browserTabStarted(Status.Success, 'Login Flow', 3);
+    metricsEmitter.browserRequest('example.com', 'Login Flow', 3);
+    metricsEmitter.browserRequestFinished('example.com', 'Login Flow', 3);
+    metricsEmitter.browserRequestFailed('example.com', 'Login Flow', 3);
+    metricsEmitter.browserResponse('example.com', 'Login Flow', 4);
+    metricsEmitter.browserRequestDuration('example.com', 'Login Flow', 4, 0.2);
+
+    const metrics = await registry.metrics();
+    expect(metrics).toContain('browser_tab_started{status="success",scenario="Login Flow"} 1');
+    expect(metrics).toContain('browser_response{hostname="example.com",scenario="Login Flow"} 1');
+    expect(metrics).not.toContain('iteration=');
   });
 });
