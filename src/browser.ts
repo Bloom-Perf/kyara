@@ -1,16 +1,16 @@
-import puppeteer, { Browser, HTTPRequest, HTTPResponse, ConsoleMessage, Page } from 'puppeteer';
+import type { Browser, HTTPRequest, HTTPResponse, ConsoleMessage, Page } from 'puppeteer';
 import { MetricsEmitter, Status } from './metrics.js';
 import { Conf } from './conf.js';
 import { Logger } from 'winston';
 import * as fs from 'fs';
 import * as yp from '@bloom-perf/yaml-pptr';
-import type { ScenarioContext } from '@bloom-perf/yaml-pptr';
+import type { ScenarioContext, SupportedBrowser } from '@bloom-perf/yaml-pptr';
 import { createResourceMonitor } from './resources.js';
 
-/** Browsers launched by Kyara and still open */
+/** Browsers the scenarios run in, still open */
 const openBrowsers = new Set<Browser>();
 
-/** Closes the browsers launched by Kyara, waiting at most `timeoutMs` */
+/** Closes the browsers still open, waiting at most `timeoutMs` */
 export const closeBrowsers = async (logger: Logger, timeoutMs = 5000): Promise<void> => {
   const closing = Promise.allSettled(
     [...openBrowsers].map((browser) =>
@@ -26,36 +26,26 @@ export const launchBrowsers = async (
   logger: Logger,
   me: MetricsEmitter
 ): Promise<void> => {
-  // Puppeteer runs Firefox in a fresh temporary profile; Chrome flags such as --no-sandbox
-  // do not apply. Scenarios run in it when they declare `browser: firefox`: otherwise
-  // yaml-pptr launches its own Chrome, not monitored here.
-  logger.info(`Launching firefox (headless: ${conf.headless})`);
-  let browser: Browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: conf.headless,
-      browser: 'firefox',
-      acceptInsecureCerts: true,
-    });
-  } catch (err) {
-    me.browserStarted('firefox', Status.Error);
-    throw err;
-  }
-  me.browserStarted('firefox', Status.Success);
-  openBrowsers.add(browser);
-  browser.once('disconnected', () => openBrowsers.delete(browser));
-
   const resources = createResourceMonitor(me, logger);
-  const pid = browser.process()?.pid;
-  if (pid !== undefined) {
-    resources.watch('firefox', pid);
-  }
+
+  /** yaml-pptr launched a browser for the scenarios: monitor it until it closes */
+  const onBrowser = (browser: Browser, name: SupportedBrowser) => {
+    me.browserStarted(name, Status.Success);
+    openBrowsers.add(browser);
+    browser.once('disconnected', () => openBrowsers.delete(browser));
+    const pid = browser.process()?.pid;
+    if (pid !== undefined) {
+      resources.watch(name, pid);
+    }
+  };
 
   try {
-    // Start all tabs and wait for completion
+    // yaml-pptr launches the browsers the scenarios use (and closes them once their
+    // scenarios are over), starts all the scenarios and waits for them to finish
     await yp.readYamlAndInterpret(fs.readFileSync(conf.yamlFilePath, { encoding: 'utf8' }), {
-      browsers: { firefox: browser },
+      headless: conf.headless,
       logger,
+      onBrowser,
       onPage: async (tab: Page, ctx: ScenarioContext) => {
         try {
           const { scenarioName, iteration } = ctx;
@@ -106,10 +96,16 @@ export const launchBrowsers = async (
         }
       },
     });
+  } catch (err) {
+    if (err instanceof AggregateError) {
+      for (const error of err.errors) {
+        if (error instanceof yp.BrowserLaunchError) {
+          me.browserStarted(error.browser, Status.Error);
+        }
+      }
+    }
+    throw err;
   } finally {
-    // The scenarios are over: an idle browser would only skew the CPU/RAM metrics
     resources.stop();
-    await browser.close().catch((err: unknown) => logger.warn(`Failed to close firefox: ${err}`));
-    openBrowsers.delete(browser);
   }
 };

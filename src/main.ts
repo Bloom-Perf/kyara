@@ -47,8 +47,8 @@ import { writeFileSync } from 'fs';
    * Runs the scenarios and resolves to whether they all succeeded.
    *
    * yaml-pptr rejects with an AggregateError once every scenario has run if some iterations
-   * failed (each failure has already been logged): the metrics of the run are still there.
-   * Any other error (invalid scenarios, missing scenario file, Firefox not starting)
+   * failed or a browser could not start (each failure has already been logged): the metrics
+   * of the run are still there. Any other error (invalid scenarios, missing scenario file)
    * means nothing ran: exit.
    */
   const runScenarios = async (): Promise<boolean> => {

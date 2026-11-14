@@ -11,12 +11,6 @@ import { Status } from '../metrics.js';
 const defaultCtx = { scenarioName: 'Test Scenario', workerIndex: 0, iteration: 0 };
 
 // Mock modules before importing the module under test
-jest.unstable_mockModule('puppeteer', () => ({
-  default: {
-    launch: jest.fn<() => Promise<any>>(),
-  },
-}));
-
 jest.unstable_mockModule('fs', () => ({
   readFileSync: jest.fn<() => string>(),
 }));
@@ -30,12 +24,17 @@ jest.unstable_mockModule('../resources.js', () => ({
   createResourceMonitor: jest.fn(() => mockResourceMonitor),
 }));
 
+class BrowserLaunchError extends Error {
+  constructor(readonly browser: string) {
+    super(`Failed to launch browser "${browser}"`);
+  }
+}
 jest.unstable_mockModule('@bloom-perf/yaml-pptr', () => ({
   readYamlAndInterpret: jest.fn<() => any>(),
+  BrowserLaunchError,
 }));
 
 // Import mocked modules
-const puppeteerMock = await import('puppeteer');
 const fsMock = await import('fs');
 const resourcesMock = await import('../resources.js');
 const ypMock = await import('@bloom-perf/yaml-pptr');
@@ -129,9 +128,6 @@ describe('launchBrowsers', () => {
       process: jest.fn<any>(() => ({ pid: 1234 })),
     };
 
-    // Setup puppeteer.launch mock
-    (puppeteerMock.default.launch as jest.Mock<() => Promise<any>>).mockResolvedValue(mockBrowser);
-
     // Setup fs.readFileSync mock
     (fsMock.readFileSync as unknown as jest.Mock).mockReturnValue('scenarios: []');
   });
@@ -148,80 +144,99 @@ describe('launchBrowsers', () => {
     expect(fsMock.readFileSync).toHaveBeenCalledWith('/test/scenario.yaml', { encoding: 'utf8' });
   });
 
-  it('should launch puppeteer with Firefox browser', async () => {
+  /** yaml-pptr launches these browsers (calls onBrowser), then runs `scenarios` */
+  const launchingBrowsers = (
+    browsers: Array<[Partial<Browser>, string]>,
+    scenarios: Promise<void> = Promise.resolve()
+  ) =>
+    (ypMock.readYamlAndInterpret as jest.Mock<any>).mockImplementation(
+      async (_yaml: any, options: any) => {
+        for (const [browser, name] of browsers) {
+          await options.onBrowser(browser, name);
+        }
+        return scenarios;
+      }
+    );
+
+  const createMockBrowser = (pid: number) => ({
+    close: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    once: jest.fn<any>(),
+    process: jest.fn<any>(() => ({ pid })),
+  });
+
+  it('should let yaml-pptr launch the browsers, headless as configured', async () => {
     setupYpMockNoCallback();
 
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
+    await launchBrowsers({ ...mockConf, headless: false }, mockLogger, mockMetricsEmitter);
 
-    expect(puppeteerMock.default.launch).toHaveBeenCalledWith(
+    const options = (ypMock.readYamlAndInterpret as jest.Mock).mock.calls[0][1];
+    expect(options).toEqual(
       expect.objectContaining({
-        headless: true,
-        browser: 'firefox',
-        acceptInsecureCerts: true,
+        headless: false,
+        logger: mockLogger,
+        onBrowser: expect.any(Function),
+        onPage: expect.any(Function),
       })
     );
-    // Chrome-only flags (--no-sandbox, --single-process...) are not passed to Firefox
-    expect(puppeteerMock.default.launch).toHaveBeenCalledWith(
-      expect.not.objectContaining({ args: expect.anything() })
-    );
+    // No browser of its own: only the ones the scenarios use are launched
+    expect(options).not.toHaveProperty('browsers');
   });
 
-  it('should emit browserStarted metric with an error status when Firefox cannot start', async () => {
-    (puppeteerMock.default.launch as jest.Mock<AsyncFn>).mockRejectedValue(
-      new Error('Could not find Firefox')
-    );
-
-    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toThrow(
-      'Could not find Firefox'
-    );
-    expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledWith('firefox', Status.Error);
-    expect(ypMock.readYamlAndInterpret).not.toHaveBeenCalled();
-  });
-
-  it('should emit browserStarted metric on successful launch', async () => {
-    setupYpMockNoCallback();
+  it('should count and measure every browser launched for the scenarios', async () => {
+    const chrome = createMockBrowser(5678);
+    launchingBrowsers([
+      [mockBrowser, 'firefox'],
+      [chrome, 'chrome'],
+    ]);
 
     await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
 
     expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledWith('firefox', Status.Success);
-  });
-
-  it('should log browser start message', async () => {
-    setupYpMockNoCallback();
-
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
-
-    expect(mockLogger.info).toHaveBeenCalledWith('Launching firefox (headless: true)');
-  });
-
-  it('should measure the CPU/RAM of Firefox while the scenarios run', async () => {
-    setupYpMockNoCallback();
-
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
-
+    expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledWith('chrome', Status.Success);
     expect(resourcesMock.createResourceMonitor).toHaveBeenCalledWith(
       mockMetricsEmitter,
       mockLogger
     );
     expect(mockResourceMonitor.watch).toHaveBeenCalledWith('firefox', 1234);
+    expect(mockResourceMonitor.watch).toHaveBeenCalledWith('chrome', 5678);
+    // The scenarios are over: stop sampling
     expect(mockResourceMonitor.stop).toHaveBeenCalled();
   });
 
-  it('should close Firefox once the scenarios are over, also when some failed', async () => {
-    (ypMock.readYamlAndInterpret as jest.Mock<AsyncFn>).mockRejectedValue(
-      new AggregateError([new Error('iteration failed')], '1 error(s)')
+  it('should count the browsers that could not be launched', async () => {
+    const failure = new AggregateError(
+      [new BrowserLaunchError('chrome'), new Error('iteration failed')],
+      '2 error(s) occurred while running scenarios'
     );
+    (ypMock.readYamlAndInterpret as jest.Mock<AsyncFn>).mockRejectedValue(failure);
 
-    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toThrow(
-      '1 error(s)'
-    );
+    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toBe(failure);
+
+    expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledTimes(1);
+    expect(mockMetricsEmitter.browserStarted).toHaveBeenCalledWith('chrome', Status.Error);
     expect(mockResourceMonitor.stop).toHaveBeenCalled();
-    expect(mockBrowser.close).toHaveBeenCalled();
+  });
+
+  it('should rethrow the errors where nothing ran', async () => {
+    const configurationError = new Error('Invalid scenario configuration');
+    (ypMock.readYamlAndInterpret as jest.Mock<AsyncFn>).mockRejectedValue(configurationError);
+
+    await expect(launchBrowsers(mockConf, mockLogger, mockMetricsEmitter)).rejects.toBe(
+      configurationError
+    );
+    expect(mockMetricsEmitter.browserStarted).not.toHaveBeenCalled();
   });
 
   it('should close the browsers still running on demand (shutdown)', async () => {
+    const chrome = createMockBrowser(5678);
     // Scenarios that never end (waitForever)
-    (ypMock.readYamlAndInterpret as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    launchingBrowsers(
+      [
+        [mockBrowser, 'firefox'],
+        [chrome, 'chrome'],
+      ],
+      new Promise(() => {})
+    );
     void launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
     await jest.advanceTimersByTimeAsync(0);
     expect(mockBrowser.close).not.toHaveBeenCalled();
@@ -229,11 +244,25 @@ describe('launchBrowsers', () => {
     await closeBrowsers(mockLogger);
 
     expect(mockBrowser.close).toHaveBeenCalled();
+    expect(chrome.close).toHaveBeenCalled();
+  });
+
+  it('should forget a browser once it is closed', async () => {
+    launchingBrowsers([[mockBrowser, 'firefox']]);
+    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
+
+    // yaml-pptr closed it after its scenarios
+    expect(mockBrowser.once).toHaveBeenCalledWith('disconnected', expect.any(Function));
+    const onDisconnected = (mockBrowser.once as jest.Mock).mock.calls[0][1] as () => void;
+    onDisconnected();
+    await closeBrowsers(mockLogger);
+
+    expect(mockBrowser.close).not.toHaveBeenCalled();
   });
 
   it('should not wait more than the timeout for the browsers to close', async () => {
-    (ypMock.readYamlAndInterpret as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
     (mockBrowser.close as jest.Mock<any>).mockReturnValue(new Promise(() => {}));
+    launchingBrowsers([[mockBrowser, 'firefox']], new Promise(() => {}));
     void launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
     await jest.advanceTimersByTimeAsync(0);
 
@@ -241,20 +270,6 @@ describe('launchBrowsers', () => {
     await jest.advanceTimersByTimeAsync(1000);
 
     await expect(closing).resolves.toBeUndefined();
-  });
-
-  it('should call readYamlAndInterpret with options object containing browsers and onPage', async () => {
-    setupYpMockNoCallback();
-
-    await launchBrowsers(mockConf, mockLogger, mockMetricsEmitter);
-
-    expect(ypMock.readYamlAndInterpret).toHaveBeenCalledWith(
-      'scenarios: []',
-      expect.objectContaining({
-        browsers: expect.objectContaining({ firefox: mockBrowser }),
-        onPage: expect.any(Function),
-      })
-    );
   });
 
   it('should emit browserTabStarted metric with scenario context when onPage is invoked', async () => {
