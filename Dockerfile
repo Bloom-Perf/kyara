@@ -5,7 +5,7 @@
 # linux/amd64 only (also when built on an arm64 machine): Chrome for Testing has no
 # Linux arm64 build.
 
-FROM --platform=linux/amd64 node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS node
+FROM --platform=linux/amd64 node:26-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5 AS node
 
 FROM node AS base
 WORKDIR /app
